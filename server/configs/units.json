@@ -1,0 +1,13 @@
+{
+  "units": [
+    {
+      "id": "infantry",
+      "attack": 10,
+      "defense": 10,
+      "speedCellsPerHour": 6,
+      "cost": { "wood": 100, "iron": 50 },
+      "trainSeconds": 30,
+      "slots": 1
+    }
+  ]
+}

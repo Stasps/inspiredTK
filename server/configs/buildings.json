@@ -1,0 +1,70 @@
+{
+  "balanceNote": "PLACEHOLDER: стоимости, времена и производство не сбалансированы, подлежат правке балансировщиком. Здания и уровни - по GAME/game-design.md (MVP-0).",
+  "buildings": [
+    {
+      "id": "main",
+      "maxLevel": 5,
+      "levels": [
+        { "level": 1, "cost": { "wood": 70, "stone": 40, "iron": 20 }, "buildSeconds": 60, "buildFactorPerMille": 1000 },
+        { "level": 2, "cost": { "wood": 90, "stone": 50, "iron": 25 }, "buildSeconds": 90, "buildFactorPerMille": 900 },
+        { "level": 3, "cost": { "wood": 120, "stone": 70, "iron": 35 }, "buildSeconds": 120, "buildFactorPerMille": 800 },
+        { "level": 4, "cost": { "wood": 160, "stone": 90, "iron": 45 }, "buildSeconds": 180, "buildFactorPerMille": 700 },
+        { "level": 5, "cost": { "wood": 210, "stone": 120, "iron": 60 }, "buildSeconds": 240, "buildFactorPerMille": 600 }
+      ]
+    },
+    {
+      "id": "sawmill",
+      "maxLevel": 5,
+      "productionResource": "wood",
+      "levels": [
+        { "level": 1, "cost": { "wood": 40, "stone": 10, "iron": 5 }, "buildSeconds": 60, "productionPerHour": 10 },
+        { "level": 2, "cost": { "wood": 65, "stone": 15, "iron": 10 }, "buildSeconds": 90, "productionPerHour": 20 },
+        { "level": 3, "cost": { "wood": 110, "stone": 25, "iron": 15 }, "buildSeconds": 120, "productionPerHour": 35 },
+        { "level": 4, "cost": { "wood": 185, "stone": 40, "iron": 25 }, "buildSeconds": 180, "productionPerHour": 55 },
+        { "level": 5, "cost": { "wood": 310, "stone": 70, "iron": 40 }, "buildSeconds": 240, "productionPerHour": 80 }
+      ]
+    },
+    {
+      "id": "mine",
+      "maxLevel": 5,
+      "isMine": true,
+      "levels": [
+        { "level": 1, "cost": { "wood": 50, "stone": 15, "iron": 10 }, "buildSeconds": 60, "productionPerHour": 8 },
+        { "level": 2, "cost": { "wood": 80, "stone": 25, "iron": 15 }, "buildSeconds": 90, "productionPerHour": 16 },
+        { "level": 3, "cost": { "wood": 135, "stone": 40, "iron": 25 }, "buildSeconds": 120, "productionPerHour": 28 },
+        { "level": 4, "cost": { "wood": 225, "stone": 65, "iron": 40 }, "buildSeconds": 180, "productionPerHour": 44 },
+        { "level": 5, "cost": { "wood": 375, "stone": 110, "iron": 65 }, "buildSeconds": 240, "productionPerHour": 64 }
+      ]
+    },
+    {
+      "id": "farm",
+      "maxLevel": 5,
+      "productionResource": "food",
+      "levels": [
+        { "level": 1, "cost": { "wood": 45, "stone": 20, "iron": 5 }, "buildSeconds": 60, "productionPerHour": 12 },
+        { "level": 2, "cost": { "wood": 70, "stone": 30, "iron": 10 }, "buildSeconds": 90, "productionPerHour": 24 },
+        { "level": 3, "cost": { "wood": 120, "stone": 50, "iron": 15 }, "buildSeconds": 120, "productionPerHour": 42 },
+        { "level": 4, "cost": { "wood": 200, "stone": 85, "iron": 25 }, "buildSeconds": 180, "productionPerHour": 66 },
+        { "level": 5, "cost": { "wood": 335, "stone": 140, "iron": 40 }, "buildSeconds": 240, "productionPerHour": 96 }
+      ]
+    },
+    {
+      "id": "barracks",
+      "maxLevel": 3,
+      "levels": [
+        { "level": 1, "cost": { "wood": 150, "stone": 80, "iron": 60 }, "buildSeconds": 120, "slots": 20 },
+        { "level": 2, "cost": { "wood": 190, "stone": 100, "iron": 75 }, "buildSeconds": 180, "slots": 20 },
+        { "level": 3, "cost": { "wood": 240, "stone": 130, "iron": 95 }, "buildSeconds": 240, "slots": 20 }
+      ]
+    },
+    {
+      "id": "granary",
+      "maxLevel": 3,
+      "levels": [
+        { "level": 1, "cost": { "wood": 100, "stone": 60, "iron": 30 }, "buildSeconds": 90, "slots": 50 },
+        { "level": 2, "cost": { "wood": 130, "stone": 75, "iron": 40 }, "buildSeconds": 120, "slots": 50 },
+        { "level": 3, "cost": { "wood": 165, "stone": 95, "iron": 50 }, "buildSeconds": 180, "slots": 50 }
+      ]
+    }
+  ]
+}

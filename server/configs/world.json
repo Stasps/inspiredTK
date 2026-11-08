@@ -1,0 +1,21 @@
+{
+  "balanceNote": "PLACEHOLDER: вместимость складов, стартовые ресурсы, награда лагерей и шансы месторождений не сбалансированы. Размер карты, окна, интервал атак варваров - по GAME/game-design.md.",
+  "mapSize": 100,
+  "seed": 42,
+  "campCountMin": 5,
+  "campCountMax": 10,
+  "campArmyMin": 10,
+  "campArmyMax": 50,
+  "barbarianAttackIntervalHours": 24,
+  "snapshotIntervalSeconds": 300,
+  "snapshotPath": "data/snapshot.json",
+  "eventLogPath": "data/events.jsonl",
+  "testMode": true,
+  "startResources": { "wood": 500, "stone": 500, "iron": 500, "food": 500 },
+  "storageCapacityFood": 5000,
+  "storageCapacityNonFood": 5000,
+  "campRewardStock": { "wood": 300, "stone": 200, "iron": 100, "food": 400 },
+  "depositChancePerMille": { "wood": 400, "stone": 200, "iron": 150, "food": 300 },
+  "windowHours": 3,
+  "windowsPerPlayer": 2
+}

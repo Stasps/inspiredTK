@@ -1,0 +1,4 @@
+# Scratch of agents and skills (session-cleanup writes its digest of private chats here)
+.tmp/
+AGENTS.md
+modules/

@@ -1,0 +1,12 @@
+{
+  "balanceNote": "Модификаторы обороны 1.5/3.0 - по GAME/game-design.md (зафиксировано). Порог перевеса набега и фактор потерь набега - PLACEHOLDER, отбалансировать позже. Минимум 10% потерь по решению человека пока не реализован.",
+  "defenseModifierNoWallsPerMille": 1500,
+  "defenseModifierMaxWallsPerMille": 3000,
+  "raidSuperiorityThresholdPerMille": 2000,
+  "raidLossFactorPerMille": 500,
+  "provisionTiers": [
+    { "maxDistanceCells": 10, "foodPerUnit": 10 },
+    { "maxDistanceCells": 30, "foodPerUnit": 25 },
+    { "maxDistanceCells": 0, "foodPerUnit": 50 }
+  ]
+}

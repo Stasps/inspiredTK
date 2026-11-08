@@ -1,0 +1,8 @@
+{
+  "resources": [
+    { "id": "wood", "category": "nonfood" },
+    { "id": "stone", "category": "nonfood" },
+    { "id": "iron", "category": "nonfood" },
+    { "id": "food", "category": "food" }
+  ]
+}
