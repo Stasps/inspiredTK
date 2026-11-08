@@ -100,8 +100,10 @@ inspiredTK/
 │   ├── architecture.md    # Техническая архитектура, запреты, сетевые правила
 │   ├── save-structure.md  # Формат снапшота, моменты пересчёта
 │   ├── art-direction.md   # Арт-направление
-│   ├── roadmap.md         # План разработки
 │   └── ...                # quality-attributes, polishing, ideas
+├── documentation/         # Общая документация и планы
+│   ├── roadmap.md         # План разработки (обновлённый)
+│   └── server-setup-plan.md # Технический план реализации транспорта
 ├── modules/               # Методические модули (Go, Unity, сеть, генерация изображений)
 └── server/                # Бэкенд-симуляция (Go)
     ├── cmd/server/        # Точка входа: headless-сервер, тиковый цикл
