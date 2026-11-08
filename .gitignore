@@ -2,3 +2,10 @@
 .tmp/
 AGENTS.md
 modules/
+
+# Артефакты сборки
+server.exe
+# Если snapshot.json отсутствует, сервер генерирует новый мир
+server/data/snapshot.json
+# Если events.jsonl отсутствует, сервер создаёт его
+server/data/events.jsonl
