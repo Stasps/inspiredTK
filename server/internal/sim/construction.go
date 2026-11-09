@@ -15,6 +15,12 @@ func (e *Engine) StartConstruction(playerID, villageID, buildingKey string, now 
 	if err != nil {
 		return err
 	}
+	return e.startConstruction(v, buildingKey, now)
+}
+
+// startConstruction - тело StartConstruction без проверки владения
+// (используется также командой upgrade_building от транспорта).
+func (e *Engine) startConstruction(v *domain.Village, buildingKey string, now int64) error {
 	base, resource := parseBuildingKey(buildingKey)
 	bc, ok := e.Cfg.BuildingByID[base]
 	if !ok {
@@ -22,22 +28,22 @@ func (e *Engine) StartConstruction(playerID, villageID, buildingKey string, now 
 	}
 	e.applyConstruction(v, now)
 	if v.BuildJob != nil {
-		return fmt.Errorf("village %s: build queue is busy", villageID)
+		return fmt.Errorf("village %s: build queue is busy", v.ID)
 	}
 	current := v.Buildings[buildingKey]
 	if current >= bc.MaxLevel {
-		return fmt.Errorf("village %s: building %q already at max level %d", villageID, buildingKey, bc.MaxLevel)
+		return fmt.Errorf("village %s: building %q already at max level %d", v.ID, buildingKey, bc.MaxLevel)
 	}
 	if bc.IsMine {
 		if resource == "" {
-			return fmt.Errorf("village %s: mine requires a deposit resource, e.g. \"mine:stone\"", villageID)
+			return fmt.Errorf("village %s: mine requires a deposit resource, e.g. \"mine:stone\"", v.ID)
 		}
 		if _, ok := e.Cfg.ResourceByID[resource]; !ok {
-			return fmt.Errorf("village %s: unknown deposit resource %q", villageID, resource)
+			return fmt.Errorf("village %s: unknown deposit resource %q", v.ID, resource)
 		}
 		cell := e.World.CellAt(v.X, v.Y)
 		if cell == nil || !cell.HasDeposit(resource) {
-			return fmt.Errorf("village %s: no %s deposit at (%d,%d)", villageID, resource, v.X, v.Y)
+			return fmt.Errorf("village %s: no %s deposit at (%d,%d)", v.ID, resource, v.X, v.Y)
 		}
 	}
 	target := current + 1
@@ -112,13 +118,18 @@ func (e *Engine) StartTraining(playerID, villageID string, count int, now int64)
 	if err != nil {
 		return err
 	}
+	return e.startTraining(v, count, now)
+}
+
+// startTraining - тело StartTraining без проверки владения.
+func (e *Engine) startTraining(v *domain.Village, count int, now int64) error {
 	e.applyConstruction(v, now)
 	e.applyTraining(v, now)
 	if v.Buildings["barracks"] < 1 {
-		return fmt.Errorf("village %s: barracks level 1 required for training", villageID)
+		return fmt.Errorf("village %s: barracks level 1 required for training", v.ID)
 	}
 	if v.StationedInfantry+v.TrainQueueRemaining+count > e.slotsCapacity(v) {
-		return fmt.Errorf("village %s: not enough unit slots", villageID)
+		return fmt.Errorf("village %s: not enough unit slots", v.ID)
 	}
 	uc := e.Cfg.UnitByID["infantry"]
 	e.settle(v, now)
@@ -147,10 +158,10 @@ func (e *Engine) applyTraining(v *domain.Village, now int64) {
 
 // InstantComplete - тестовый режим «завершить немедленно»
 // (GAME/game-design.md, «Тестовый режим (MVP-0)»): мгновенно завершает
-// строительство и тренировку в деревне. Доступно только при testMode.
+// строительство и тренировку в деревне. Доступно только при debugMode.
 func (e *Engine) InstantComplete(playerID, villageID string, now int64) error {
-	if !e.Cfg.World.TestMode {
-		return errors.New("instant complete is disabled: testMode is off")
+	if !e.Cfg.World.DebugMode {
+		return errors.New("instant complete is disabled: debugMode is off")
 	}
 	v, err := e.ownedVillage(playerID, villageID)
 	if err != nil {

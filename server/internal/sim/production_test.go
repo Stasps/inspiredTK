@@ -18,6 +18,9 @@ func newTestEngine(t *testing.T, now int64) *Engine {
 	if err != nil {
 		t.Fatalf("load configs: %v", err)
 	}
+	// Базовая выработка отключена в тестах: тесты механик не должны зависеть
+	// от прохода серверного времени (её проверяет TestBaseProduction).
+	cfg.World.BaseProductionPerHour = 0
 	return NewEngine(cfg, NewWorld(cfg, now), persistence.NewEventLog(io.Discard))
 }
 
@@ -56,14 +59,30 @@ func TestProductionCappedAtStorage(t *testing.T) {
 	e := newTestEngine(t, testT0)
 	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
 	v.Buildings = map[string]int{"main": 1, "farm": 5}
-	// Почти полный продовольственный склад: свободно ровно 3 единицы.
+	// Почти полный продовольственный склад (вместимость 1000 ед.): свободно
+	// ровно 3 единицы.
 	for resID := range v.ResourcesMilli {
 		v.ResourcesMilli[resID] = 0
 	}
-	v.ResourcesMilli["food"] = 5_000_000 - 3_000
+	v.ResourcesMilli["food"] = 1_000_000 - 3_000
 	e.settle(v, testT0+10*3600)
-	if got := v.ResourcesMilli["food"]; got != 5_000_000 {
-		t.Fatalf("food must cap at storage: got %d, want 5000000", got)
+	if got := v.ResourcesMilli["food"]; got != 1_000_000 {
+		t.Fatalf("food must cap at storage: got %d, want 1000000", got)
+	}
+}
+
+// TestBaseProduction проверяет базовую выработку каждой деревни по конфигу
+// мира (baseProductionPerHour на каждый ресурс, без зданий).
+func TestBaseProduction(t *testing.T) {
+	e := newTestEngine(t, testT0)
+	e.Cfg.World.BaseProductionPerHour = 10
+	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	e.settle(v, testT0+3600)
+	for _, resID := range []string{"wood", "stone", "iron", "food"} {
+		// Старт 500 ед. + 10 ед./час = 510 ед.
+		if got := v.ResourcesMilli[resID]; got != 510_000 {
+			t.Fatalf("%s after 1h: got %d, want 510000", resID, got)
+		}
 	}
 }
 
@@ -133,11 +152,11 @@ func TestConstructionPaysOnlyOnce(t *testing.T) {
 	}
 }
 
-func TestInstantCompleteRequiresTestMode(t *testing.T) {
+func TestInstantCompleteRequiresDebugMode(t *testing.T) {
 	e := newTestEngine(t, testT0)
 	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
-	e.Cfg.World.TestMode = false
+	e.Cfg.World.DebugMode = false
 	if err := e.InstantComplete("p1", v.ID, testT0); err == nil {
-		t.Fatalf("instant complete must be rejected without testMode")
+		t.Fatalf("instant complete must be rejected without debugMode")
 	}
 }

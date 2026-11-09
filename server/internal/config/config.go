@@ -91,7 +91,8 @@ type WorldFile struct {
 	SnapshotIntervalSeconds      int64            `json:"snapshotIntervalSeconds"`
 	SnapshotPath                 string           `json:"snapshotPath"`
 	EventLogPath                 string           `json:"eventLogPath"`
-	TestMode                     bool             `json:"testMode"`
+	DebugMode                    bool             `json:"debugMode"`
+	BaseProductionPerHour        int64            `json:"baseProductionPerHour"`
 	StartResources               map[string]int64 `json:"startResources"`
 	StorageCapacityFood          int64            `json:"storageCapacityFood"`
 	StorageCapacityNonFood       int64            `json:"storageCapacityNonFood"`
@@ -353,6 +354,9 @@ func (c *Config) validateWorld() error {
 	}
 	if w.StorageCapacityFood <= 0 || w.StorageCapacityNonFood <= 0 {
 		return fmt.Errorf("world.json: storage capacities must be positive")
+	}
+	if w.BaseProductionPerHour < 0 {
+		return fmt.Errorf("world.json: baseProductionPerHour must not be negative")
 	}
 	if w.WindowHours <= 0 || w.WindowsPerPlayer <= 0 {
 		return fmt.Errorf("world.json: windowHours and windowsPerPlayer must be positive")

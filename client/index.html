@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspired Kingdoms</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', monospace;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #e94560; margin-bottom: 20px; }
+        h2 { color: #0f3460; margin: 20px 0 10px; }
+        
+        .panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .resources {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        .resource {
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .resource .value { font-size: 24px; font-weight: bold; color: #e94560; }
+        
+        .buildings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .building {
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .building button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #e94560;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+        }
+        .building button:hover { background: #c73650; }
+        .building button:disabled { background: #555; cursor: not-allowed; }
+        
+        .log {
+            height: 200px;
+            overflow-y: auto;
+            background: #0a0a1a;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .log div { margin: 2px 0; }
+        .log .error { color: #ff6b6b; }
+        .log .success { color: #51cf66; }
+        
+        #connection-status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .connected { background: #51cf66; color: #000; }
+        .disconnected { background: #ff6b6b; color: #000; }
+        
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .actions button {
+            padding: 10px 20px;
+            background: #0f3460;
+            border: 1px solid #e94560;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+        }
+        .actions button:hover { background: #e94560; }
+    </style>
+</head>
+<body>
+    <h1>⚔️ Inspired Kingdoms</h1>
+    
+    <div class="panel">
+        <span id="connection-status" class="disconnected">Отключено</span>
+        <button onclick="toggleConnection()" style="margin-left: 10px;">Подключить</button>
+        <span style="margin-left: 15px;">Тик: <span id="tick">0</span></span>
+    </div>
+
+    <div class="panel">
+        <h2>Ресурсы</h2>
+        <div class="resources" id="resources">
+            <div class="resource"><div>Дерево</div><div class="value" id="res-wood">0</div></div>
+            <div class="resource"><div>Камень</div><div class="value" id="res-stone">0</div></div>
+            <div class="resource"><div>Железо</div><div class="value" id="res-iron">0</div></div>
+            <div class="resource"><div>Еда</div><div class="value" id="res-food">0</div></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Здания</h2>
+        <div class="buildings" id="buildings"></div>
+    </div>
+
+    <div class="panel">
+        <h2>Армия</h2>
+        <div id="army">Пехотинцев: <span id="unit-infantry">0</span></div>
+        <div class="actions" style="margin-top: 10px;">
+            <button onclick="trainUnit('infantry', 1)">+1 Пехотинец</button>
+            <button onclick="trainUnit('infantry', 10)">+10 Пехотинцев</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Действия</h2>
+        <div class="actions">
+            <button onclick="sendCommand('finish_now', {})">⏩ Завершить немедленно (тест)</button>
+            <button onclick="sendCommand('attack_nearest_camp', {})">⚔️ Атаковать ближайший лагерь</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Лог</h2>
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let connected = false;
+
+        // Connect or disconnect
+        function toggleConnection() {
+            if (connected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+
+        // Connect to server
+        function connect() {
+            const status = document.getElementById('connection-status');
+            
+            try {
+                ws = new WebSocket('ws://localhost:8080/ws');
+                
+                ws.onopen = () => {
+                    connected = true;
+                    status.textContent = 'Подключено';
+                    status.className = 'connected';
+                    log('Подключено к серверу', 'success');
+                };
+                
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    handleMessage(msg);
+                };
+                
+                ws.onclose = () => {
+                    connected = false;
+                    status.textContent = 'Отключено';
+                    status.className = 'disconnected';
+                    log('Соединение закрыто', 'error');
+                };
+                
+                ws.onerror = (error) => {
+                    log('Ошибка соединения', 'error');
+                };
+                
+            } catch (e) {
+                log('Ошибка: ' + e.message, 'error');
+            }
+        }
+
+        // Disconnect from server
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        // Handle incoming message
+        function handleMessage(msg) {
+            if (msg.type === 'state') {
+                updateState(msg.data);
+            } else if (msg.type === 'error') {
+                log('Ошибка: ' + (msg.data.error || 'Unknown'), 'error');
+            } else if (msg.type === 'success') {
+                log('Успешно', 'success');
+            }
+        }
+
+        // Update UI with game state (World: villages keyed by id)
+        function updateState(state) {
+            const villages = state.villages ? Object.values(state.villages) : [];
+            if (villages.length === 0) {
+                document.getElementById('tick').textContent = state.tick || 0;
+                return;
+            }
+            const v = villages[0];
+
+            // Resources (milli-units on server)
+            const rm = v.resourcesMilli || {};
+            document.getElementById('res-wood').textContent = Math.floor((rm.wood || 0) / 1000);
+            document.getElementById('res-stone').textContent = Math.floor((rm.stone || 0) / 1000);
+            document.getElementById('res-iron').textContent = Math.floor((rm.iron || 0) / 1000);
+            document.getElementById('res-food').textContent = Math.floor((rm.food || 0) / 1000);
+            document.getElementById('tick').textContent = state.tick || 0;
+
+            // Buildings: server sends {buildingKey: level}
+            updateBuildings(v.buildings || {});
+
+            // Army
+            document.getElementById('unit-infantry').textContent = v.stationedInfantry || 0;
+        }
+
+        // Update buildings display
+        function updateBuildings(buildings) {
+            const container = document.getElementById('buildings');
+            container.innerHTML = '';
+
+            const buildingNames = {
+                'main': 'Главное здание',
+                'sawmill': 'Лесопилка',
+                'quarry': 'Шахта',
+                'iron_mine': 'Железный рудник',
+                'farm': 'Ферма',
+                'barracks': 'Казарма',
+                'granary': 'Амбар'
+            };
+
+            for (const [id, level] of Object.entries(buildings)) {
+                const div = document.createElement('div');
+                div.className = 'building';
+
+                const name = buildingNames[id] || id;
+
+                div.innerHTML = `
+                    <div><strong>${name}</strong></div>
+                    <div>Уровень: ${level}</div>
+                    <button onclick="upgradeBuilding('${id}')">
+                        Улучшить
+                    </button>
+                `;
+
+                container.appendChild(div);
+            }
+        }
+
+        // Send command to server
+        function sendCommand(cmd, data) {
+            if (!connected || !ws) {
+                log('Не подключено к серверу', 'error');
+                return;
+            }
+            
+            const msg = {
+                type: 'command',
+                cmd: cmd,
+                data: data
+            };
+            
+            ws.send(JSON.stringify(msg));
+            log(`Отправлено: ${cmd}`);
+        }
+
+        // Upgrade building
+        function upgradeBuilding(buildingId) {
+            sendCommand('upgrade_building', { building: buildingId });
+        }
+
+        // Train units
+        function trainUnit(unitType, count) {
+            sendCommand('train_unit', { unit: unitType, count: count });
+        }
+
+        // Log message
+        function log(message, type = '') {
+            const logEl = document.getElementById('log');
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // Auto-connect on load
+        window.onload = () => {
+            connect();
+        };
+    </script>
+</body>
+</html>

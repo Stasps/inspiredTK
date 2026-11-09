@@ -2,6 +2,7 @@
 .tmp/
 AGENTS.md
 modules/
+task.md
 
 # Артефакты сборки
 server.exe

@@ -37,7 +37,8 @@ func prepareWarVillage(t *testing.T, e *Engine, x, y int, now int64) *domain.Vil
 	t.Helper()
 	v := newPlayerVillage(t, e, "p1", x, y, now)
 	v.StationedInfantry = 20
-	v.ResourcesMilli["food"] = 2_000_000
+	// Ровно под вместимость продовольственного склада (1000 ед. из конфига).
+	v.ResourcesMilli["food"] = 1_000_000
 	return v
 }
 

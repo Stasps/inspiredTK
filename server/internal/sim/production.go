@@ -19,6 +19,14 @@ func (e *Engine) settle(v *domain.Village, now int64) {
 		return
 	}
 	dt := now - v.LastSettledUnix
+	// Базовая выработка: каждая деревня производит немного каждого ресурса
+	// даже без зданий (GAME/game-design.md, MVP-0).
+	if base := e.Cfg.World.BaseProductionPerHour; base > 0 {
+		baseMilli := util.PerHourToMilli(base)
+		for _, rc := range e.Cfg.Resources.Resources {
+			e.addCapped(v, rc.ID, util.AccrueMilli(baseMilli, dt))
+		}
+	}
 	keys := sortedKeys(v.Buildings)
 	for _, key := range keys {
 		level := v.Buildings[key]
