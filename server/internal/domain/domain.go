@@ -44,7 +44,8 @@ type Player struct {
 type BuildJob struct {
 	BuildingKey string `json:"buildingKey"`
 	TargetLevel int    `json:"targetLevel"`
-	FinishUnix  int64  `json:"finishUnix"`
+	StartUnix    int64  `json:"startUnix"`
+	FinishUnix   int64  `json:"finishUnix"`
 }
 
 // Village - деревня игрока. ResourcesMilli - остатки ресурсов в милли-единицах.

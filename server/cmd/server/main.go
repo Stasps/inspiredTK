@@ -99,10 +99,13 @@ func main() {
 		select {
 		case t := <-tick.C:
 			engine.Tick(t.Unix())
-			wsServer.BroadcastState(engine.World)
+			wsServer.BroadcastState(stateOf(engine))
 		case cmd := <-wsServer.CommandChan():
 			if err := executeCommand(engine, wsServer, cmd); err != nil {
 				logger.Printf("command %s failed: %v", cmd.Name, err)
+				wsServer.Broadcast(transport.MessageTypeError, map[string]string{
+					"error": fmt.Sprintf("command %s: %v", cmd.Name, err),
+				})
 			}
 		case <-snapTick.C:
 			save()
@@ -117,12 +120,34 @@ func main() {
 // debugPlayerID - аккаунт-заглушка, создаваемый в debugMode при пустом мире.
 const debugPlayerID = "debug"
 
-// createDebugPlayer сажает debug-игрока на первую свободную клетку карты.
+// stateOf собирает состояние для рассылки: мир + состояние деревни debug-игрока.
+func stateOf(e *sim.Engine) interface{} {
+	v, err := debugVillage(e)
+	if err != nil {
+		return e.GetClientState("", time.Now().Unix())
+	}
+	return e.GetClientState(v.ID, time.Now().Unix())
+}
+
+// createDebugPlayer сажает debug-игрока на первую свободную клетку карты
+// с месторождением, чтобы шахта (mine:<resource>) была доступна сразу;
+// если месторождений рядом нет - на первую свободную клетку.
 func createDebugPlayer(e *sim.Engine) error {
-	for _, c := range e.World.Cells {
-		if c.VillageID == "" && c.CampID == "" {
+	fallback := -1
+	for i, c := range e.World.Cells {
+		if c.VillageID != "" || c.CampID != "" {
+			continue
+		}
+		if fallback < 0 {
+			fallback = i
+		}
+		if len(c.Deposits) > 0 {
 			return e.CreatePlayer(debugPlayerID, "Debug Player", c.X, c.Y, 10, 19, time.Now().Unix())
 		}
+	}
+	if fallback >= 0 {
+		c := e.World.Cells[fallback]
+		return e.CreatePlayer(debugPlayerID, "Debug Player", c.X, c.Y, 10, 19, time.Now().Unix())
 	}
 	return fmt.Errorf("no free cell on the map")
 }
@@ -187,6 +212,12 @@ func executeCommand(e *sim.Engine, ws *transport.Server, cmd transport.Command) 
 	case "get_map":
 		ws.Broadcast(transport.MessageTypeMap, e.GetMap())
 		return nil
+	case "skip_time":
+		seconds, ok := toInt64(cmd.Data["seconds"])
+		if !ok || seconds <= 0 {
+			return fmt.Errorf("skip_time: invalid seconds parameter")
+		}
+		return e.SkipTime(seconds)
 	default:
 		return fmt.Errorf("unknown command: %s", cmd.Name)
 	}

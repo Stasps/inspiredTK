@@ -1,0 +1,15 @@
+# Автоматически определять текстовые файлы
+* text=auto
+
+# Явно зафиксировать LF для кода
+*.go text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Бинарные файлы — не трогать
+*.png binary
+*.jpg binary
+*.exe binary

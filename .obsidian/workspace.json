@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "documentation/concept-doc.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "concept-doc"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "README.md",
+                "file": "documentation/concept-doc.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -189,6 +189,11 @@
   },
   "active": "9bd80173b5dc1b0b",
   "lastOpenFiles": [
+    "documentation/game-design.md",
+    "documentation/ideas.md",
+    "documentation/concept-doc.md",
+    "TODO.md",
+    "README.md",
     "documentation/save-structure.md",
     "ref-balance/troops.csv",
     "ref-balance/buildings.csv",
@@ -201,15 +206,10 @@
     "reference-balance/Admin/Mods/questSave.php",
     "reference-balance/Admin/Mods/recalcWH.php",
     "documentation/architecture.md",
-    "documentation/concept-doc.md",
     "documentation/roadmap.md",
-    "documentation/game-design.md",
-    "documentation/ideas.md",
-    "README.md",
     "CHANGELOG.md",
     "coding-prompt-continue-engine.md",
     "modules/golang.md",
-    "task.md",
     "modules/game-development.md",
     "modules/code-style.md",
     "documentation/server-setup-plan.md",

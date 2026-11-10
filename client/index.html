@@ -16,14 +16,14 @@
         }
         h1 { color: #e94560; margin-bottom: 20px; }
         h2 { color: #0f3460; margin: 20px 0 10px; }
-        
+
         .panel {
             background: #16213e;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 15px;
         }
-        
+
         .resources {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -36,7 +36,7 @@
             text-align: center;
         }
         .resource .value { font-size: 24px; font-weight: bold; color: #e94560; }
-        
+
         .buildings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         .building {
             background: #0f3460;
@@ -55,7 +55,7 @@
         }
         .building button:hover { background: #c73650; }
         .building button:disabled { background: #555; cursor: not-allowed; }
-        
+
         .log {
             height: 200px;
             overflow-y: auto;
@@ -67,7 +67,7 @@
         .log div { margin: 2px 0; }
         .log .error { color: #ff6b6b; }
         .log .success { color: #51cf66; }
-        
+
         #connection-status {
             padding: 5px 10px;
             border-radius: 4px;
@@ -75,7 +75,7 @@
         }
         .connected { background: #51cf66; color: #000; }
         .disconnected { background: #ff6b6b; color: #000; }
-        
+
         .actions { display: flex; gap: 10px; flex-wrap: wrap; }
         .actions button {
             padding: 10px 20px;
@@ -86,15 +86,77 @@
             cursor: pointer;
         }
         .actions button:hover { background: #e94560; }
+
+        .debug-panel {
+            background: #3a2e10;
+            border: 1px solid #f0a500;
+        }
+        .debug-panel h2 { color: #f0a500; }
+        .debug-panel .actions button {
+            background: #574412;
+            border-color: #f0a500;
+        }
+        .debug-panel .actions button:hover { background: #f0a500; color: #000; }
+
+        .map-grid {
+            display: grid;
+            gap: 1px;
+            background: #0a0a1a;
+            padding: 5px;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 500px;
+            width: fit-content;
+        }
+        .map-cell { width: 14px; height: 14px; }
+        .map-cell.empty { background: #16213e; }
+        .map-cell.village { background: #51cf66; }
+        .map-cell.camp { background: #e94560; }
+        .map-cell.deposit { background: #f0a500; }
+        .map-legend span { margin-right: 15px; font-size: 12px; }
+        .map-legend .swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+        .hidden { display: none; }
+
+        .progress-container {
+            margin-top: 10px;
+            padding: 10px;
+            background: #0f3460;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            background: #16213e;
+            height: 20px;
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: #e94560;
+            height: 100%;
+            border-radius: 4px;
+            transition: width 1s linear;
+        }
+        .progress-text {
+            font-size: 12px;
+            margin-top: 3px;
+            color: #aaa;
+        }
     </style>
+<base target="_blank">
 </head>
 <body>
     <h1>⚔️ Inspired Kingdoms</h1>
-    
+
     <div class="panel">
         <span id="connection-status" class="disconnected">Отключено</span>
         <button onclick="toggleConnection()" style="margin-left: 10px;">Подключить</button>
-        <span style="margin-left: 15px;">Тик: <span id="tick">0</span></span>
+        <span style="margin-left: 15px;">Время сервера: <span id="server-time">-</span></span>
     </div>
 
     <div class="panel">
@@ -110,11 +172,33 @@
     <div class="panel">
         <h2>Здания</h2>
         <div class="buildings" id="buildings"></div>
+        <div id="build-progress" class="progress-container hidden">
+            <div>🔨 Строительство: <span id="build-name"></span> → <span id="build-level"></span> ур.</div>
+            <div class="progress-bar">
+                <div id="build-bar" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">Осталось: <span id="build-remaining"></span> сек</div>
+        </div>
+    </div>
+
+    <div class="panel hidden" id="map-panel">
+        <h2>Карта</h2>
+        <div class="map-legend">
+            <span><span class="swatch" style="background:#51cf66"></span>Деревня</span>
+            <span><span class="swatch" style="background:#e94560"></span>Лагерь</span>
+            <span><span class="swatch" style="background:#f0a500"></span>Месторождение</span>
+        </div>
+        <div class="map-grid" id="map-grid" style="margin-top: 10px;"></div>
+        <button onclick="toggleMap()" style="margin-top: 10px;">Скрыть карту</button>
     </div>
 
     <div class="panel">
         <h2>Армия</h2>
         <div id="army">Пехотинцев: <span id="unit-infantry">0</span></div>
+        <div id="train-progress" class="progress-container hidden">
+            <div>⚔️ Тренировка: <span id="train-count"></span> юнитов в очереди</div>
+            <div class="progress-text">Следующий через: <span id="train-remaining"></span> сек</div>
+        </div>
         <div class="actions" style="margin-top: 10px;">
             <button onclick="trainUnit('infantry', 1)">+1 Пехотинец</button>
             <button onclick="trainUnit('infantry', 10)">+10 Пехотинцев</button>
@@ -124,8 +208,18 @@
     <div class="panel">
         <h2>Действия</h2>
         <div class="actions">
-            <button onclick="sendCommand('finish_now', {})">⏩ Завершить немедленно (тест)</button>
             <button onclick="sendCommand('attack_nearest_camp', {})">⚔️ Атаковать ближайший лагерь</button>
+            <button onclick="toggleMap()">🗺️ Показать карту</button>
+        </div>
+    </div>
+
+    <div class="panel debug-panel" id="debug-panel">
+        <h2>🔧 Отладка</h2>
+        <div class="actions">
+            <button onclick="sendCommand('finish_now', {})">⏩ Завершить немедленно</button>
+            <button onclick="addResourcesDebug()">💰 Добавить ресурсы</button>
+            <button onclick="sendCommand('skip_time', {seconds: 60})">⏪ +1 минута</button>
+            <button onclick="sendCommand('skip_time', {seconds: 3600})">⏪ +1 час</button>
         </div>
     </div>
 
@@ -138,6 +232,7 @@
         // WebSocket connection
         let ws = null;
         let connected = false;
+        let mapVisible = false;
 
         // Connect or disconnect
         function toggleConnection() {
@@ -151,33 +246,33 @@
         // Connect to server
         function connect() {
             const status = document.getElementById('connection-status');
-            
+
             try {
                 ws = new WebSocket('ws://localhost:8080/ws');
-                
+
                 ws.onopen = () => {
                     connected = true;
                     status.textContent = 'Подключено';
                     status.className = 'connected';
                     log('Подключено к серверу', 'success');
                 };
-                
+
                 ws.onmessage = (event) => {
                     const msg = JSON.parse(event.data);
                     handleMessage(msg);
                 };
-                
+
                 ws.onclose = () => {
                     connected = false;
                     status.textContent = 'Отключено';
                     status.className = 'disconnected';
                     log('Соединение закрыто', 'error');
                 };
-                
+
                 ws.onerror = (error) => {
                     log('Ошибка соединения', 'error');
                 };
-                
+
             } catch (e) {
                 log('Ошибка: ' + e.message, 'error');
             }
@@ -195,34 +290,85 @@
             if (msg.type === 'state') {
                 updateState(msg.data);
             } else if (msg.type === 'error') {
-                log('Ошибка: ' + (msg.data.error || 'Unknown'), 'error');
+                const err = msg.data ? (msg.data.error || msg.data) : null;
+                log('Ошибка: ' + (err || 'Unknown error'), 'error');
+            } else if (msg.type === 'map') {
+                renderMap(msg.data);
             } else if (msg.type === 'success') {
                 log('Успешно', 'success');
             }
         }
 
-        // Update UI with game state (World: villages keyed by id)
+        // Update UI with game state
         function updateState(state) {
             const villages = state.villages ? Object.values(state.villages) : [];
+
+            // Серверное время
+            const serverNow = state.village?.serverTimeUnix || Math.floor(Date.now() / 1000);
+            document.getElementById('server-time').textContent = new Date(serverNow * 1000).toLocaleTimeString();
+
             if (villages.length === 0) {
-                document.getElementById('tick').textContent = state.tick || 0;
                 return;
             }
             const v = villages[0];
 
-            // Resources (milli-units on server)
+            // Resources
             const rm = v.resourcesMilli || {};
             document.getElementById('res-wood').textContent = Math.floor((rm.wood || 0) / 1000);
             document.getElementById('res-stone').textContent = Math.floor((rm.stone || 0) / 1000);
             document.getElementById('res-iron').textContent = Math.floor((rm.iron || 0) / 1000);
             document.getElementById('res-food').textContent = Math.floor((rm.food || 0) / 1000);
-            document.getElementById('tick').textContent = state.tick || 0;
 
-            // Buildings: server sends {buildingKey: level}
-            updateBuildings(v.buildings || {});
+            // Buildings
+            updateBuildings(state.village?.buildings || state.buildings || []);
 
             // Army
             document.getElementById('unit-infantry').textContent = v.stationedInfantry || 0;
+
+            // Прогресс строительства
+            updateBuildProgress(v.buildJob, serverNow);
+
+            // Прогресс тренировки
+            updateTrainProgress(v, serverNow);
+        }
+
+        function updateBuildProgress(buildJob, serverNow) {
+            const el = document.getElementById('build-progress');
+            if (!buildJob) {
+                el.classList.add('hidden');
+                return;
+            }
+
+            const remaining = buildJob.finishUnix - serverNow;
+            if (remaining <= 0) {
+                el.classList.add('hidden');
+                return;
+            }
+
+            // Прогресс: от startUnix до finishUnix
+            const total = buildJob.startUnix ? (buildJob.finishUnix - buildJob.startUnix) : null;
+            const elapsed = total ? (serverNow - buildJob.startUnix) : null;
+            const progress = total ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0;
+
+            document.getElementById('build-name').textContent = buildJob.buildingKey;
+            document.getElementById('build-level').textContent = buildJob.targetLevel;
+            document.getElementById('build-bar').style.width = progress + '%';
+            document.getElementById('build-remaining').textContent = remaining;
+            el.classList.remove('hidden');
+        }
+
+        function updateTrainProgress(village, serverNow) {
+            const el = document.getElementById('train-progress');
+            if (!village.trainQueueRemaining || village.trainQueueRemaining <= 0) {
+                el.classList.add('hidden');
+                return;
+            }
+
+            const remaining = village.trainNextFinishUnix - serverNow;
+
+            document.getElementById('train-count').textContent = village.trainQueueRemaining;
+            document.getElementById('train-remaining').textContent = remaining > 0 ? remaining : 0;
+            el.classList.remove('hidden');
         }
 
         // Update buildings display
@@ -233,29 +379,84 @@
             const buildingNames = {
                 'main': 'Главное здание',
                 'sawmill': 'Лесопилка',
-                'quarry': 'Шахта',
-                'iron_mine': 'Железный рудник',
+                'mine': 'Шахта',
                 'farm': 'Ферма',
                 'barracks': 'Казарма',
                 'granary': 'Амбар'
             };
+            const resourceNames = {
+                'wood': 'дерево', 'stone': 'камень', 'iron': 'железо', 'food': 'еда'
+            };
 
-            for (const [id, level] of Object.entries(buildings)) {
+            for (const b of buildings) {
                 const div = document.createElement('div');
                 div.className = 'building';
 
-                const name = buildingNames[id] || id;
+                const name = buildingNames[b.id] || buildingName(b.id, buildingNames, resourceNames);
+                const costText = b.cost
+                    ? Object.entries(b.cost)
+                        .map(([res, amount]) => `${amount} ${resourceNames[res] || res}`)
+                        .join(', ')
+                    : '';
+                const atMax = b.level >= b.max_level;
 
                 div.innerHTML = `
                     <div><strong>${name}</strong></div>
-                    <div>Уровень: ${level}</div>
-                    <button onclick="upgradeBuilding('${id}')">
-                        Улучшить
+                    <div>Уровень: ${b.level} / ${b.max_level}</div>
+                    ${costText && !atMax ? `<div style="font-size:12px">Стоимость: ${costText}</div>` : ''}
+                    <button onclick="upgradeBuilding('${b.id}')" ${b.can_upgrade ? '' : 'disabled'}>
+                        ${atMax ? 'Макс. уровень' : 'Улучшить'}
                     </button>
                 `;
 
                 container.appendChild(div);
             }
+        }
+
+        function buildingName(id, buildingNames, resourceNames) {
+            const [base, resource] = id.split(':');
+            const baseName = buildingNames[base] || base;
+            return resource ? `${baseName} (${resourceNames[resource] || resource})` : baseName;
+        }
+
+        // Toggle map visibility
+        function toggleMap() {
+            const panel = document.getElementById('map-panel');
+            mapVisible = !mapVisible;
+            if (mapVisible) {
+                sendCommand('get_map', {});
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        // Render map cells into grid
+        function renderMap(cells) {
+            if (!cells || cells.length === 0) return;
+            const panel = document.getElementById('map-panel');
+            const grid = document.getElementById('map-grid');
+            let maxX = 0, maxY = 0;
+            for (const c of cells) {
+                if (c.x > maxX) maxX = c.x;
+                if (c.y > maxY) maxY = c.y;
+            }
+            grid.style.gridTemplateColumns = `repeat(${maxX + 1}, 14px)`;
+            grid.innerHTML = '';
+            const byCoord = {};
+            for (const c of cells) byCoord[c.y * (maxX + 1) + c.x] = c;
+            for (let y = 0; y <= maxY; y++) {
+                for (let x = 0; x <= maxX; x++) {
+                    const cell = byCoord[y * (maxX + 1) + x];
+                    const div = document.createElement('div');
+                    div.className = 'map-cell ' + (cell ? cell.type : 'empty');
+                    const label = cell
+                        ? `${cell.type}${cell.owner ? ' (' + cell.owner + ')' : ''}${cell.resource ? ': ' + cell.resource : ''}`
+                        : 'empty';
+                    div.title = `(${x},${y}) ${label}`;
+                    grid.appendChild(div);
+                }
+            }
+            panel.classList.remove('hidden');
         }
 
         // Send command to server
@@ -264,13 +465,13 @@
                 log('Не подключено к серверу', 'error');
                 return;
             }
-            
+
             const msg = {
                 type: 'command',
                 cmd: cmd,
                 data: data
             };
-            
+
             ws.send(JSON.stringify(msg));
             log(`Отправлено: ${cmd}`);
         }
@@ -283,6 +484,20 @@
         // Train units
         function trainUnit(unitType, count) {
             sendCommand('train_unit', { unit: unitType, count: count });
+        }
+
+        // Debug: add resources via prompt
+        function addResourcesDebug() {
+            const amount = prompt("Сколько ресурсов добавить каждого типа?", "1000");
+            if (!amount) return;
+            const n = parseInt(amount);
+            if (isNaN(n) || n <= 0) {
+                log('Неверное количество', 'error');
+                return;
+            }
+            sendCommand('add_resources', {
+                wood: n, stone: n, iron: n, food: n
+            });
         }
 
         // Log message
