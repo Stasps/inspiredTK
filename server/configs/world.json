@@ -1,6 +1,6 @@
 {
   "balanceNote": "PLACEHOLDER: вместимость складов, стартовые ресурсы, награда лагерей и шансы месторождений не сбалансированы. Размер карты, окна, интервал атак варваров - по GAME/game-design.md.",
-  "mapSize": 100,
+  "mapSize": 101,
   "seed": 42,
   "campCountMin": 5,
   "campCountMax": 10,

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "documentation/concept-doc.md",
+                "file": "documentation/roadmap.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "concept-doc"
+              "title": "roadmap"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "documentation/concept-doc.md",
+                "file": "documentation/roadmap.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -189,29 +189,31 @@
   },
   "active": "9bd80173b5dc1b0b",
   "lastOpenFiles": [
-    "documentation/game-design.md",
-    "documentation/ideas.md",
-    "documentation/concept-doc.md",
+    "server/data/snapshot.json",
+    "server/data/events.jsonl",
+    "server/data",
+    "server/internal/sim/sedZ6iqgS",
+    "client/plan.md",
+    "client/inspiredtk.html",
+    "modules/golang.md",
+    "modules/code-style.md",
+    "documentation/roadmap.md",
     "TODO.md",
+    "documentation/game-design.md",
+    "server/data/snapshot.json.tmp",
+    "client/map.html",
+    "client/1.html",
+    "documentation/concept-doc.md",
+    "documentation/ideas.md",
     "README.md",
     "documentation/save-structure.md",
     "ref-balance/troops.csv",
     "ref-balance/buildings.csv",
     "ref-balance",
-    "buildings.csv",
-    "troops.csv",
-    "reference-balance/Admin/Mods/sysmessage.php",
-    "reference-balance/Admin/Mods/renameVillage.php",
-    "reference-balance/Admin/Mods/sendMessage.php",
-    "reference-balance/Admin/Mods/questSave.php",
-    "reference-balance/Admin/Mods/recalcWH.php",
     "documentation/architecture.md",
-    "documentation/roadmap.md",
     "CHANGELOG.md",
     "coding-prompt-continue-engine.md",
-    "modules/golang.md",
     "modules/game-development.md",
-    "modules/code-style.md",
     "documentation/server-setup-plan.md",
     "documentation/art-direction.md",
     "changelog.md",
@@ -223,7 +225,6 @@
     "design and architecture documents/game-design.md",
     "design and architecture documents/polishing.md",
     "design and architecture documents/ideas.md",
-    "design and architecture documents/architecture.md",
     "ai-gamedev-starter-kit-main/design-doc/attachments/Pasted image 20260929202107.png",
     "ai-gamedev-starter-kit-main/design-doc/attachments/Pasted image 20261025164810.png",
     "ai-gamedev-starter-kit-main/design-doc/attachments/Pasted image 20260929204228.png",

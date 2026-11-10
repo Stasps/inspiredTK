@@ -31,7 +31,7 @@ func validConfig() *Config {
 			},
 		},
 		World: WorldFile{
-			MapSize:                      100,
+			MapSize:                      101,
 			CampCountMin:                 5,
 			CampCountMax:                 10,
 			CampArmyMin:                  10,

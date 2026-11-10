@@ -15,6 +15,7 @@ import (
 //   - now: серверное время создания мира
 func NewWorld(cfg *config.Config, now int64) *domain.World {
 	size := cfg.World.MapSize
+	half := size / 2
 	w := &domain.World{
 		Seed:        cfg.World.Seed,
 		CreatedUnix: now,
@@ -25,8 +26,8 @@ func NewWorld(cfg *config.Config, now int64) *domain.World {
 		Camps:       map[string]*domain.Camp{},
 		Marches:     map[string]*domain.March{},
 	}
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := -half; y <= half; y++ {
+		for x := -half; x <= half; x++ {
 			cell := &domain.Cell{X: x, Y: y}
 			for _, rc := range cfg.Resources.Resources {
 				chance := cfg.World.DepositChancePerMille[rc.ID]
@@ -70,9 +71,10 @@ func spawnCamps(cfg *config.Config, w *domain.World, now int64) {
 }
 
 func findFreeCell(w *domain.World) *domain.Cell {
+	half := w.MapHalf()
 	for attempts := 0; attempts < 1000; attempts++ {
-		x := int(w.NextRandom(int64(w.MapSize)))
-		y := int(w.NextRandom(int64(w.MapSize)))
+		x := int(w.NextRandom(int64(w.MapSize))) - half
+		y := int(w.NextRandom(int64(w.MapSize))) - half
 		cell := w.CellAt(x, y)
 		if cell.CampID == "" && cell.VillageID == "" {
 			return cell

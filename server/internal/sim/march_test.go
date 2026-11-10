@@ -44,7 +44,7 @@ func prepareWarVillage(t *testing.T, e *Engine, x, y int, now int64) *domain.Vil
 
 func TestMarchProvisionTiersAndTravelTime(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := prepareWarVillage(t, e, 50, 50, testT0)
+	v := prepareWarVillage(t, e, 0, 0, testT0)
 
 	cases := []struct {
 		name        string
@@ -52,10 +52,10 @@ func TestMarchProvisionTiersAndTravelTime(t *testing.T) {
 		wantPerUnit int64
 		wantTravel  int64
 	}{
-		{"exactly 10 cells", 56, 58, 10, 6000},          // sqrt(36+64) = 10
-		{"exactly 30 cells", 50, 80, 25, 18000},         // ровно 30 клеток
-		{"31 cells", 50, 81, 50, 18600},                 // свыше 30
-		{"10.6 cells rounds to tier 25", 43, 58, 25, 0}, // sqrt(49+64) ~ 10.63
+		{"exactly 10 cells", 6, 8, 10, 6000},          // sqrt(36+64) = 10
+		{"exactly 30 cells", 0, 30, 25, 18000},        // ровно 30 клеток
+		{"31 cells", 0, 31, 50, 18600},                // свыше 30
+		{"10.6 cells rounds to tier 25", 7, 8, 25, 0}, // sqrt(49+64) ~ 10.63
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -87,10 +87,10 @@ func TestMarchProvisionTiersAndTravelTime(t *testing.T) {
 
 func TestCancelMarchRefundsProvisionAndReturnsTroops(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := prepareWarVillage(t, e, 50, 50, testT0)
-	placeCamp(t, e, 56, 58, 1)
+	v := prepareWarVillage(t, e, 0, 0, testT0)
+	placeCamp(t, e, 6, 8, 1)
 
-	id, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 56, 58, 5, testT0)
+	id, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 5, testT0)
 	if err != nil {
 		t.Fatalf("send march: %v", err)
 	}
@@ -119,10 +119,10 @@ func TestCancelMarchRefundsProvisionAndReturnsTroops(t *testing.T) {
 
 func TestCampBattleVictoryLootAndReturn(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := prepareWarVillage(t, e, 50, 50, testT0)
-	camp := placeCamp(t, e, 56, 58, 3)
+	v := prepareWarVillage(t, e, 0, 0, testT0)
+	camp := placeCamp(t, e, 6, 8, 3)
 
-	id, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 56, 58, 10, testT0)
+	id, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 10, testT0)
 	if err != nil {
 		t.Fatalf("send march: %v", err)
 	}
@@ -155,14 +155,14 @@ func TestCampBattleVictoryLootAndReturn(t *testing.T) {
 
 func TestMarchFailsWithoutTroopsOrFood(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 50, 50, testT0)
-	placeCamp(t, e, 56, 58, 1)
-	if _, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 56, 58, 1, testT0); err == nil {
+	v := newPlayerVillage(t, e, "p1", 0, 0, testT0)
+	placeCamp(t, e, 6, 8, 1)
+	if _, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 1, testT0); err == nil {
 		t.Fatalf("march without troops must fail")
 	}
 	v.StationedInfantry = 5
 	v.ResourcesMilli["food"] = 0
-	if _, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 56, 58, 1, testT0); err == nil {
+	if _, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 1, testT0); err == nil {
 		t.Fatalf("march without provisions must fail")
 	}
 	if v.StationedInfantry != 5 {
@@ -172,7 +172,7 @@ func TestMarchFailsWithoutTroopsOrFood(t *testing.T) {
 
 func TestSimultaneousSpendsDoNotDoubleCharge(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 50, 50, testT0)
+	v := newPlayerVillage(t, e, "p1", 0, 0, testT0)
 	v.Buildings = map[string]int{"main": 1, "barracks": 1}
 	// Дерева хватает либо на тренировку (100), либо на лесопилку (40), но не на дюп:
 	// ровно 100 дерева, железа на одного пехотинца.

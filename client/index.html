@@ -5,41 +5,163 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inspired Kingdoms</title>
     <style>
+        /* ===== COLOR THEMES ===== */
+        :root {
+            --transition: 0.3s ease;
+        }
+
+        /* Theme 1: Dark Nature (default) */
+        [data-theme="nature"] {
+            --bg-primary: #1a2f1a;
+            --bg-secondary: #2d4a2d;
+            --bg-panel: #243924;
+            --bg-header: #1e3320;
+            --text-primary: #e8f5e9;
+            --text-secondary: #a5d6a7;
+            --accent: #ffb300;
+            --accent-hover: #ffc107;
+            --success: #66bb6a;
+            --error: #ef5350;
+            --border: #3e5c3e;
+            --progress-bg: #1b2f1c;
+            --debug-bg: #3a2e10;
+            --debug-border: #f0a500;
+            --cell-empty: #1b2f1c;
+            --cell-village: #66bb6a;
+            --cell-camp: #ef5350;
+            --cell-deposit: #ffb300;
+        }
+
+        /* Theme 2: Dark Minimal */
+        [data-theme="minimal"] {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-panel: #16213e;
+            --bg-header: #1a1a2e;
+            --text-primary: #eee;
+            --text-secondary: #888;
+            --accent: #e94560;
+            --accent-hover: #c73650;
+            --success: #51cf66;
+            --error: #ff6b6b;
+            --border: #0f3460;
+            --progress-bg: #0a0a1a;
+            --debug-bg: #3a2e10;
+            --debug-border: #f0a500;
+            --cell-empty: #16213e;
+            --cell-village: #51cf66;
+            --cell-camp: #e94560;
+            --cell-deposit: #f0a500;
+        }
+
+        /* Theme 3: Light Sand */
+        [data-theme="sand"] {
+            --bg-primary: #f5f5dc;
+            --bg-secondary: #e8e8d0;
+            --bg-panel: #fff8dc;
+            --bg-header: #f0e6c0;
+            --text-primary: #3e2723;
+            --text-secondary: #6d4c41;
+            --accent: #d84315;
+            --accent-hover: #bf360c;
+            --success: #2e7d32;
+            --error: #c62828;
+            --border: #d7ccc8;
+            --progress-bg: #efebe9;
+            --debug-bg: #fff9c4;
+            --debug-border: #f57f17;
+            --cell-empty: #d7ccc8;
+            --cell-village: #2e7d32;
+            --cell-camp: #c62828;
+            --cell-deposit: #f57f17;
+        }
+
+        /* ===== BASE STYLES ===== */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', monospace;
-            background: #1a1a2e;
-            color: #eee;
-            padding: 20px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 0;
             max-width: 1200px;
             margin: 0 auto;
+            transition: background var(--transition), color var(--transition);
         }
-        h1 { color: #e94560; margin-bottom: 20px; }
-        h2 { color: #0f3460; margin: 20px 0 10px; }
+
+        .header {
+            position: sticky;
+            top: 0;
+            background: var(--bg-header);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+            border-bottom: 2px solid var(--border);
+            flex-wrap: wrap;
+            transition: background var(--transition);
+        }
+        .header-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        .header-emoji {
+            font-size: 16px;
+        }
+        .header-value {
+            font-weight: bold;
+            color: var(--accent);
+            font-size: 14px;
+        }
+        .header-production {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .header-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        #connection-status {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .connected { background: var(--success); color: #000; }
+        .disconnected { background: var(--error); color: #000; }
+        .header button {
+            padding: 5px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .header button:hover { background: var(--accent); color: #000; }
+
+        .content {
+            padding: 20px;
+        }
 
         .panel {
-            background: #16213e;
+            background: var(--bg-panel);
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 15px;
+            border: 1px solid var(--border);
+            transition: background var(--transition);
         }
-
-        .resources {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
+        .panel h2 {
+            color: var(--text-secondary);
+            margin: 0 0 10px 0;
+            font-size: 18px;
         }
-        .resource {
-            background: #0f3460;
-            padding: 10px;
-            border-radius: 4px;
-            text-align: center;
-        }
-        .resource .value { font-size: 24px; font-weight: bold; color: #e94560; }
 
         .buildings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         .building {
-            background: #0f3460;
+            background: var(--bg-secondary);
             padding: 10px;
             border-radius: 4px;
         }
@@ -47,97 +169,66 @@
             width: 100%;
             padding: 8px;
             margin-top: 5px;
-            background: #e94560;
+            background: var(--accent);
             border: none;
             border-radius: 4px;
-            color: white;
+            color: #fff;
             cursor: pointer;
         }
-        .building button:hover { background: #c73650; }
+        .building button:hover { background: var(--accent-hover); }
         .building button:disabled { background: #555; cursor: not-allowed; }
 
         .log {
             height: 200px;
             overflow-y: auto;
-            background: #0a0a1a;
+            background: var(--bg-primary);
             padding: 10px;
             border-radius: 4px;
             font-size: 12px;
         }
         .log div { margin: 2px 0; }
-        .log .error { color: #ff6b6b; }
-        .log .success { color: #51cf66; }
-
-        #connection-status {
-            padding: 5px 10px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-        .connected { background: #51cf66; color: #000; }
-        .disconnected { background: #ff6b6b; color: #000; }
+        .log .error { color: var(--error); }
+        .log .success { color: var(--success); }
 
         .actions { display: flex; gap: 10px; flex-wrap: wrap; }
         .actions button {
             padding: 10px 20px;
-            background: #0f3460;
-            border: 1px solid #e94560;
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent);
             border-radius: 4px;
-            color: white;
+            color: var(--text-primary);
             cursor: pointer;
         }
-        .actions button:hover { background: #e94560; }
+        .actions button:hover { background: var(--accent); color: #000; }
 
         .debug-panel {
-            background: #3a2e10;
-            border: 1px solid #f0a500;
+            background: var(--debug-bg);
+            border: 1px solid var(--debug-border);
         }
-        .debug-panel h2 { color: #f0a500; }
+        .debug-panel h2 { color: var(--debug-border); }
         .debug-panel .actions button {
-            background: #574412;
-            border-color: #f0a500;
+            background: var(--bg-secondary);
+            border-color: var(--debug-border);
         }
-        .debug-panel .actions button:hover { background: #f0a500; color: #000; }
+        .debug-panel .actions button:hover { background: var(--debug-border); color: #000; }
 
-        .map-grid {
-            display: grid;
-            gap: 1px;
-            background: #0a0a1a;
-            padding: 5px;
-            border-radius: 4px;
-            overflow: auto;
-            max-height: 500px;
-            width: fit-content;
-        }
-        .map-cell { width: 14px; height: 14px; }
-        .map-cell.empty { background: #16213e; }
-        .map-cell.village { background: #51cf66; }
-        .map-cell.camp { background: #e94560; }
-        .map-cell.deposit { background: #f0a500; }
-        .map-legend span { margin-right: 15px; font-size: 12px; }
-        .map-legend .swatch {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            margin-right: 4px;
-            vertical-align: middle;
-        }
         .hidden { display: none; }
 
         .progress-container {
             margin-top: 10px;
             padding: 10px;
-            background: #0f3460;
+            background: var(--bg-secondary);
             border-radius: 4px;
         }
         .progress-bar {
-            background: #16213e;
+            background: var(--progress-bg);
             height: 20px;
             border-radius: 4px;
             margin-top: 5px;
             overflow: hidden;
         }
         .progress-fill {
-            background: #e94560;
+            background: var(--accent);
             height: 100%;
             border-radius: 4px;
             transition: width 1s linear;
@@ -145,96 +236,276 @@
         .progress-text {
             font-size: 12px;
             margin-top: 3px;
-            color: #aaa;
+            color: var(--text-secondary);
+        }
+
+        .nav-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            color: var(--text-primary);
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .nav-link:hover { background: var(--accent); color: #000; }
+        .nav-link.active {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .theme-selector {
+            display: flex;
+            gap: 5px;
+            margin-left: auto;
+        }
+        .theme-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            cursor: pointer;
+        }
+        .theme-btn.active {
+            border-color: var(--accent);
+        }
+        .theme-nature { background: linear-gradient(135deg, #1a2f1a 50%, #ffb300 50%); }
+        .theme-minimal { background: linear-gradient(135deg, #1a1a2e 50%, #e94560 50%); }
+        .theme-sand { background: linear-gradient(135deg, #f5f5dc 50%, #d84315 50%); }
+
+        /* ===== MAP PAGE ===== */
+        .map-legend {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .map-legend span {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .map-legend .swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 2px;
+        }
+
+        .map-grid {
+            display: grid;
+            gap: 1px;
+            background: var(--bg-primary);
+            padding: 5px;
+            border-radius: 4px;
+            overflow: auto;
+            max-height: 70vh;
+            width: fit-content;
+            margin: 0 auto;
+        }
+        .map-cell {
+            width: 12px;
+            height: 12px;
+            cursor: pointer;
+        }
+        .map-cell:hover {
+            outline: 1px solid var(--text-primary);
+            z-index: 10;
+        }
+        .map-cell.empty { background: var(--cell-empty); }
+        .map-cell.village { background: var(--cell-village); }
+        .map-cell.camp { background: var(--cell-camp); }
+        .map-cell.deposit { background: var(--cell-deposit); }
+
+        .cell-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            font-size: 14px;
+            min-height: 40px;
+        }
+
+        #map-log {
+            margin-top: 15px;
+            height: 100px;
         }
     </style>
-<base target="_blank">
 </head>
-<body>
-    <h1>⚔️ Inspired Kingdoms</h1>
-
-    <div class="panel">
+<body data-theme="nature">
+    <!-- Sticky header -->
+    <div class="header">
         <span id="connection-status" class="disconnected">Отключено</span>
-        <button onclick="toggleConnection()" style="margin-left: 10px;">Подключить</button>
-        <span style="margin-left: 15px;">Время сервера: <span id="server-time">-</span></span>
-    </div>
+        <button onclick="toggleConnection()">Подключить</button>
 
-    <div class="panel">
-        <h2>Ресурсы</h2>
-        <div class="resources" id="resources">
-            <div class="resource"><div>Дерево</div><div class="value" id="res-wood">0</div></div>
-            <div class="resource"><div>Камень</div><div class="value" id="res-stone">0</div></div>
-            <div class="resource"><div>Железо</div><div class="value" id="res-iron">0</div></div>
-            <div class="resource"><div>Еда</div><div class="value" id="res-food">0</div></div>
+        <div class="header-item">
+            <span class="header-label">🕐 Сервер</span>
+            <span class="header-value" id="server-time">-</span>
+        </div>
+
+        <div class="header-item">
+            <span class="header-emoji">🌲</span>
+            <span class="header-value" id="res-wood">0</span>
+            <span class="header-production" id="prod-wood">+0/ч</span>
+        </div>
+
+        <div class="header-item">
+            <span class="header-emoji">🪨</span>
+            <span class="header-value" id="res-stone">0</span>
+            <span class="header-production" id="prod-stone">+0/ч</span>
+        </div>
+
+        <div class="header-item">
+            <span class="header-emoji">⛏️</span>
+            <span class="header-value" id="res-iron">0</span>
+            <span class="header-production" id="prod-iron">+0/ч</span>
+        </div>
+
+        <div class="header-item">
+            <span class="header-emoji">🌾</span>
+            <span class="header-value" id="res-food">0</span>
+            <span class="header-production" id="prod-food">+0/ч</span>
+        </div>
+
+        <a href="#main" class="nav-link" data-page="main">🏠 Деревня</a>
+        <a href="#map" class="nav-link" data-page="map">🗺️ Карта</a>
+
+        <div class="theme-selector">
+            <div class="theme-btn theme-nature active" onclick="setTheme('nature')" title="Природа"></div>
+            <div class="theme-btn theme-minimal" onclick="setTheme('minimal')" title="Минимализм"></div>
+            <div class="theme-btn theme-sand" onclick="setTheme('sand')" title="Песок"></div>
         </div>
     </div>
 
-    <div class="panel">
-        <h2>Здания</h2>
-        <div class="buildings" id="buildings"></div>
-        <div id="build-progress" class="progress-container hidden">
-            <div>🔨 Строительство: <span id="build-name"></span> → <span id="build-level"></span> ур.</div>
-            <div class="progress-bar">
-                <div id="build-bar" class="progress-fill" style="width: 0%"></div>
+    <!-- ===== MAIN PAGE ===== -->
+    <div class="content" id="page-main">
+        <div class="panel">
+            <h2>Здания</h2>
+            <div class="buildings" id="buildings"></div>
+            <div id="build-progress" class="progress-container hidden">
+                <div>🔨 Строительство: <span id="build-name"></span> → <span id="build-level"></span> ур.</div>
+                <div class="progress-bar">
+                    <div id="build-bar" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text">Осталось: <span id="build-remaining"></span> сек</div>
             </div>
-            <div class="progress-text">Осталось: <span id="build-remaining"></span> сек</div>
+        </div>
+
+        <div class="panel">
+            <h2>Армия</h2>
+            <div id="army">Пехотинцев: <span id="unit-infantry">0</span></div>
+            <div id="train-progress" class="progress-container hidden">
+                <div>⚔️ Тренировка: <span id="train-count"></span> юнитов в очереди</div>
+                <div class="progress-text">Следующий через: <span id="train-remaining"></span> сек</div>
+            </div>
+            <div class="actions" style="margin-top: 10px;">
+                <button onclick="trainUnit('infantry', 1)">+1 Пехотинец</button>
+                <button onclick="trainUnit('infantry', 10)">+10 Пехотинцев</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Действия</h2>
+            <div class="actions">
+                <button onclick="sendCommand('attack_nearest_camp', {})">⚔️ Атаковать ближайший лагерь</button>
+            </div>
+        </div>
+
+        <div class="panel debug-panel" id="debug-panel">
+            <h2>🔧 Отладка</h2>
+            <div class="actions">
+                <button onclick="sendCommand('finish_now', {})">⏩ Завершить немедленно</button>
+                <button onclick="addResourcesDebug()">💰 Добавить ресурсы</button>
+                <button onclick="sendCommand('skip_time', {seconds: 60})">⏪ +1 минута</button>
+                <button onclick="sendCommand('skip_time', {seconds: 3600})">⏪ +1 час</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Лог</h2>
+            <div class="log" id="log"></div>
         </div>
     </div>
 
-    <div class="panel hidden" id="map-panel">
-        <h2>Карта</h2>
-        <div class="map-legend">
-            <span><span class="swatch" style="background:#51cf66"></span>Деревня</span>
-            <span><span class="swatch" style="background:#e94560"></span>Лагерь</span>
-            <span><span class="swatch" style="background:#f0a500"></span>Месторождение</span>
-        </div>
-        <div class="map-grid" id="map-grid" style="margin-top: 10px;"></div>
-        <button onclick="toggleMap()" style="margin-top: 10px;">Скрыть карту</button>
-    </div>
+    <!-- ===== MAP PAGE ===== -->
+    <div class="content hidden" id="page-map">
+        <div class="panel">
+            <h2>🗺️ Карта мира</h2>
+            <div class="actions" style="margin-bottom: 15px;">
+                <button onclick="loadMap(true)">Обновить</button>
+            </div>
 
-    <div class="panel">
-        <h2>Армия</h2>
-        <div id="army">Пехотинцев: <span id="unit-infantry">0</span></div>
-        <div id="train-progress" class="progress-container hidden">
-            <div>⚔️ Тренировка: <span id="train-count"></span> юнитов в очереди</div>
-            <div class="progress-text">Следующий через: <span id="train-remaining"></span> сек</div>
-        </div>
-        <div class="actions" style="margin-top: 10px;">
-            <button onclick="trainUnit('infantry', 1)">+1 Пехотинец</button>
-            <button onclick="trainUnit('infantry', 10)">+10 Пехотинцев</button>
-        </div>
-    </div>
+            <div class="map-legend">
+                <span><span class="swatch" style="background:var(--cell-village)"></span>Деревня</span>
+                <span><span class="swatch" style="background:var(--cell-camp)"></span>Лагерь</span>
+                <span><span class="swatch" style="background:var(--cell-deposit)"></span>Месторождение</span>
+                <span><span class="swatch" style="background:var(--cell-empty)"></span>Пусто</span>
+            </div>
 
-    <div class="panel">
-        <h2>Действия</h2>
-        <div class="actions">
-            <button onclick="sendCommand('attack_nearest_camp', {})">⚔️ Атаковать ближайший лагерь</button>
-            <button onclick="toggleMap()">🗺️ Показать карту</button>
-        </div>
-    </div>
+            <div class="map-grid" id="map-grid"></div>
 
-    <div class="panel debug-panel" id="debug-panel">
-        <h2>🔧 Отладка</h2>
-        <div class="actions">
-            <button onclick="sendCommand('finish_now', {})">⏩ Завершить немедленно</button>
-            <button onclick="addResourcesDebug()">💰 Добавить ресурсы</button>
-            <button onclick="sendCommand('skip_time', {seconds: 60})">⏪ +1 минута</button>
-            <button onclick="sendCommand('skip_time', {seconds: 3600})">⏪ +1 час</button>
-        </div>
-    </div>
+            <div class="cell-info" id="cell-info">
+                Наведите курсор на клетку для информации
+            </div>
 
-    <div class="panel">
-        <h2>Лог</h2>
-        <div class="log" id="log"></div>
+            <div class="log" id="map-log"></div>
+        </div>
     </div>
 
     <script>
-        // WebSocket connection
+        // ===== Theme management =====
+        function setTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('ik-theme', theme);
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('.theme-' + theme).classList.add('active');
+        }
+
+        const savedTheme = localStorage.getItem('ik-theme') || 'nature';
+        setTheme(savedTheme);
+
+        // ===== Page routing =====
+        let currentPage = 'main';
+        let mapLoaded = false;
+        let mapData = null;
+        let lastMapRequestAt = 0;
+        const MAP_CACHE_TTL_MS = 30000;
+
+        function getPageFromHash() {
+            const hash = location.hash.replace('#', '');
+            return hash === 'map' ? 'map' : 'main';
+        }
+
+        function showPage(page) {
+            currentPage = page;
+            document.getElementById('page-main').classList.toggle('hidden', page !== 'main');
+            document.getElementById('page-map').classList.toggle('hidden', page !== 'map');
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.toggle('active', link.dataset.page === page);
+            });
+            document.title = page === 'map'
+                ? 'Inspired Kingdoms - Карта'
+                : 'Inspired Kingdoms - Деревня';
+            // WebSocket не останавливаем: страница карты просто скрывается.
+            if (page === 'map') {
+                if (mapData) {
+                    renderMap(mapData);
+                } else {
+                    loadMap(false);
+                }
+            }
+        }
+
+        window.addEventListener('hashchange', () => {
+            showPage(getPageFromHash());
+        });
+
+        // ===== WebSocket connection =====
         let ws = null;
         let connected = false;
-        let mapVisible = false;
 
-        // Connect or disconnect
         function toggleConnection() {
             if (connected) {
                 disconnect();
@@ -243,7 +514,6 @@
             }
         }
 
-        // Connect to server
         function connect() {
             const status = document.getElementById('connection-status');
 
@@ -255,6 +525,9 @@
                     status.textContent = 'Подключено';
                     status.className = 'connected';
                     log('Подключено к серверу', 'success');
+                    if (currentPage === 'map' && !mapData) {
+                        loadMap(false);
+                    }
                 };
 
                 ws.onmessage = (event) => {
@@ -278,32 +551,48 @@
             }
         }
 
-        // Disconnect from server
         function disconnect() {
             if (ws) {
                 ws.close();
             }
         }
 
-        // Handle incoming message
         function handleMessage(msg) {
             if (msg.type === 'state') {
                 updateState(msg.data);
+            } else if (msg.type === 'map') {
+                mapLoaded = true;
+                mapData = msg.data;
+                if (currentPage === 'map') {
+                    renderMap(mapData);
+                }
             } else if (msg.type === 'error') {
                 const err = msg.data ? (msg.data.error || msg.data) : null;
                 log('Ошибка: ' + (err || 'Unknown error'), 'error');
-            } else if (msg.type === 'map') {
-                renderMap(msg.data);
             } else if (msg.type === 'success') {
                 log('Успешно', 'success');
             }
         }
 
-        // Update UI with game state
+        function sendCommand(cmd, data) {
+            if (!connected || !ws) {
+                log('Не подключено к серверу', 'error');
+                return;
+            }
+
+            const msg = {
+                type: 'command',
+                cmd: cmd,
+                data: data
+            };
+
+            ws.send(JSON.stringify(msg));
+        }
+
+        // ===== Main page: village state =====
         function updateState(state) {
             const villages = state.villages ? Object.values(state.villages) : [];
 
-            // Серверное время
             const serverNow = state.village?.serverTimeUnix || Math.floor(Date.now() / 1000);
             document.getElementById('server-time').textContent = new Date(serverNow * 1000).toLocaleTimeString();
 
@@ -319,16 +608,21 @@
             document.getElementById('res-iron').textContent = Math.floor((rm.iron || 0) / 1000);
             document.getElementById('res-food').textContent = Math.floor((rm.food || 0) / 1000);
 
+            // Production per hour
+            const prod = state.village?.productionPerHour || {};
+            document.getElementById('prod-wood').textContent = '+' + (prod.wood || 0) + '/ч';
+            document.getElementById('prod-stone').textContent = '+' + (prod.stone || 0) + '/ч';
+            document.getElementById('prod-iron').textContent = '+' + (prod.iron || 0) + '/ч';
+            document.getElementById('prod-food').textContent = '+' + (prod.food || 0) + '/ч';
+
             // Buildings
             updateBuildings(state.village?.buildings || state.buildings || []);
 
             // Army
             document.getElementById('unit-infantry').textContent = v.stationedInfantry || 0;
 
-            // Прогресс строительства
+            // Progress
             updateBuildProgress(v.buildJob, serverNow);
-
-            // Прогресс тренировки
             updateTrainProgress(v, serverNow);
         }
 
@@ -345,7 +639,6 @@
                 return;
             }
 
-            // Прогресс: от startUnix до finishUnix
             const total = buildJob.startUnix ? (buildJob.finishUnix - buildJob.startUnix) : null;
             const elapsed = total ? (serverNow - buildJob.startUnix) : null;
             const progress = total ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0;
@@ -371,7 +664,6 @@
             el.classList.remove('hidden');
         }
 
-        // Update buildings display
         function updateBuildings(buildings) {
             const container = document.getElementById('buildings');
             container.innerHTML = '';
@@ -382,7 +674,8 @@
                 'mine': 'Шахта',
                 'farm': 'Ферма',
                 'barracks': 'Казарма',
-                'granary': 'Амбар'
+                'granary': 'Амбар',
+                'warehouse': 'Склад'
             };
             const resourceNames = {
                 'wood': 'дерево', 'stone': 'камень', 'iron': 'железо', 'food': 'еда'
@@ -419,74 +712,14 @@
             return resource ? `${baseName} (${resourceNames[resource] || resource})` : baseName;
         }
 
-        // Toggle map visibility
-        function toggleMap() {
-            const panel = document.getElementById('map-panel');
-            mapVisible = !mapVisible;
-            if (mapVisible) {
-                sendCommand('get_map', {});
-            } else {
-                panel.classList.add('hidden');
-            }
-        }
-
-        // Render map cells into grid
-        function renderMap(cells) {
-            if (!cells || cells.length === 0) return;
-            const panel = document.getElementById('map-panel');
-            const grid = document.getElementById('map-grid');
-            let maxX = 0, maxY = 0;
-            for (const c of cells) {
-                if (c.x > maxX) maxX = c.x;
-                if (c.y > maxY) maxY = c.y;
-            }
-            grid.style.gridTemplateColumns = `repeat(${maxX + 1}, 14px)`;
-            grid.innerHTML = '';
-            const byCoord = {};
-            for (const c of cells) byCoord[c.y * (maxX + 1) + c.x] = c;
-            for (let y = 0; y <= maxY; y++) {
-                for (let x = 0; x <= maxX; x++) {
-                    const cell = byCoord[y * (maxX + 1) + x];
-                    const div = document.createElement('div');
-                    div.className = 'map-cell ' + (cell ? cell.type : 'empty');
-                    const label = cell
-                        ? `${cell.type}${cell.owner ? ' (' + cell.owner + ')' : ''}${cell.resource ? ': ' + cell.resource : ''}`
-                        : 'empty';
-                    div.title = `(${x},${y}) ${label}`;
-                    grid.appendChild(div);
-                }
-            }
-            panel.classList.remove('hidden');
-        }
-
-        // Send command to server
-        function sendCommand(cmd, data) {
-            if (!connected || !ws) {
-                log('Не подключено к серверу', 'error');
-                return;
-            }
-
-            const msg = {
-                type: 'command',
-                cmd: cmd,
-                data: data
-            };
-
-            ws.send(JSON.stringify(msg));
-            log(`Отправлено: ${cmd}`);
-        }
-
-        // Upgrade building
         function upgradeBuilding(buildingId) {
             sendCommand('upgrade_building', { building: buildingId });
         }
 
-        // Train units
         function trainUnit(unitType, count) {
             sendCommand('train_unit', { unit: unitType, count: count });
         }
 
-        // Debug: add resources via prompt
         function addResourcesDebug() {
             const amount = prompt("Сколько ресурсов добавить каждого типа?", "1000");
             if (!amount) return;
@@ -500,7 +733,102 @@
             });
         }
 
-        // Log message
+        // ===== Map page =====
+        function loadMap(force = false) {
+            if (!connected || !ws) {
+                mapLog('Не подключено к серверу', 'error');
+                return;
+            }
+            const fresh = mapLoaded && (Date.now() - lastMapRequestAt) < MAP_CACHE_TTL_MS;
+            if (!force && fresh) {
+                return;
+            }
+            lastMapRequestAt = Date.now();
+            sendCommand('get_map', {});
+        }
+
+        function renderMap(cells) {
+            if (!cells || cells.length === 0) return;
+            if (renderMap.lastRendered === cells) return;
+            renderMap.lastRendered = cells;
+
+            const grid = document.getElementById('map-grid');
+            let maxX = 0, maxY = 0;
+            let minX = 0, minY = 0;
+
+            for (const c of cells) {
+                if (c.x > maxX) maxX = c.x;
+                if (c.y > maxY) maxY = c.y;
+                if (c.x < minX) minX = c.x;
+                if (c.y < minY) minY = c.y;
+            }
+
+            const width = maxX - minX + 1;
+            const height = maxY - minY + 1;
+
+            grid.style.gridTemplateColumns = `repeat(${width}, 12px)`;
+            grid.innerHTML = '';
+
+            const byCoord = {};
+            for (const c of cells) {
+                byCoord[(c.y - minY) * width + (c.x - minX)] = c;
+            }
+
+            const fragment = document.createDocumentFragment();
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const cell = byCoord[y * width + x];
+                    const div = document.createElement('div');
+                    div.className = 'map-cell ' + (cell ? cell.type : 'empty');
+
+                    const actualX = x + minX;
+                    const actualY = y + minY;
+
+                    div.addEventListener('mouseenter', () => {
+                        showCellInfo(cell, actualX, actualY);
+                    });
+
+                    fragment.appendChild(div);
+                }
+            }
+            grid.appendChild(fragment);
+
+            // Центрируем вид на центре карты (0,0).
+            grid.scrollLeft = (grid.scrollWidth - grid.clientWidth) / 2;
+            grid.scrollTop = (grid.scrollHeight - grid.clientHeight) / 2;
+
+            mapLog(`Карта загружена: ${cells.length} клеток`);
+        }
+
+        function showCellInfo(cell, x, y) {
+            const info = document.getElementById('cell-info');
+
+            if (!cell || cell.type === 'empty') {
+                info.textContent = `(${x}, ${y}) - пустая клетка`;
+                return;
+            }
+
+            let text = `(${x}, ${y}) - `;
+
+            switch (cell.type) {
+                case 'village':
+                    text += `деревня ${cell.id}`;
+                    if (cell.owner) text += ` (владелец: ${cell.owner})`;
+                    break;
+                case 'camp':
+                    text += `лагерь варваров ${cell.id}`;
+                    break;
+                case 'deposit':
+                    text += `месторождение: ${cell.resource}`;
+                    break;
+                default:
+                    text += cell.type;
+            }
+
+            info.textContent = text;
+        }
+
+        // ===== Logging =====
         function log(message, type = '') {
             const logEl = document.getElementById('log');
             const div = document.createElement('div');
@@ -510,8 +838,18 @@
             logEl.scrollTop = logEl.scrollHeight;
         }
 
-        // Auto-connect on load
+        function mapLog(message, type = '') {
+            const logEl = document.getElementById('map-log');
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // ===== Init =====
         window.onload = () => {
+            showPage(getPageFromHash());
             connect();
         };
     </script>

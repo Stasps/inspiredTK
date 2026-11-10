@@ -65,6 +65,15 @@
         { "level": 2, "cost": { "wood": 130, "stone": 75, "iron": 40 }, "buildSeconds": 120, "slots": 50 },
         { "level": 3, "cost": { "wood": 165, "stone": 95, "iron": 50 }, "buildSeconds": 180, "slots": 50 }
       ]
+    },
+    {
+      "id": "warehouse",
+      "maxLevel": 3,
+      "levels": [
+        { "level": 1, "cost": { "wood": 120, "stone": 70, "iron": 35 }, "buildSeconds": 100, "capacity": 1000 },
+        { "level": 2, "cost": { "wood": 155, "stone": 90, "iron": 45 }, "buildSeconds": 140, "capacity": 2500 },
+        { "level": 3, "cost": { "wood": 200, "stone": 115, "iron": 60 }, "buildSeconds": 200, "capacity": 5000 }
+      ]
     }
   ]
 }

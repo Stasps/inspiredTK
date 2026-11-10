@@ -129,24 +129,33 @@ func stateOf(e *sim.Engine) interface{} {
 	return e.GetClientState(v.ID, time.Now().Unix())
 }
 
-// createDebugPlayer сажает debug-игрока на первую свободную клетку карты
-// с месторождением, чтобы шахта (mine:<resource>) была доступна сразу;
-// если месторождений рядом нет - на первую свободную клетку.
+// createDebugPlayer сажает debug-игрока в центр карты (0,0); если центр занят -
+// на ближайшую к свободную клетку с месторождением (чтобы шахта mine:<resource>
+// была доступна сразу), если месторождений рядом нет - на ближайшую свободную.
 func createDebugPlayer(e *sim.Engine) error {
-	fallback := -1
+	bestDeposit := -1
+	bestFree := -1
+	var bestDepositDist, bestFreeDist int64 = -1, -1
 	for i, c := range e.World.Cells {
 		if c.VillageID != "" || c.CampID != "" {
 			continue
 		}
-		if fallback < 0 {
-			fallback = i
+		dx := int64(c.X)
+		dy := int64(c.Y)
+		d := dx*dx + dy*dy
+		if len(c.Deposits) > 0 && (bestDeposit < 0 || d < bestDepositDist) {
+			bestDeposit, bestDepositDist = i, d
 		}
-		if len(c.Deposits) > 0 {
-			return e.CreatePlayer(debugPlayerID, "Debug Player", c.X, c.Y, 10, 19, time.Now().Unix())
+		if bestFree < 0 || d < bestFreeDist {
+			bestFree, bestFreeDist = i, d
 		}
 	}
-	if fallback >= 0 {
-		c := e.World.Cells[fallback]
+	idx := bestDeposit
+	if idx < 0 {
+		idx = bestFree
+	}
+	if idx >= 0 {
+		c := e.World.Cells[idx]
 		return e.CreatePlayer(debugPlayerID, "Debug Player", c.X, c.Y, 10, 19, time.Now().Unix())
 	}
 	return fmt.Errorf("no free cell on the map")

@@ -29,6 +29,7 @@ type LevelConfig struct {
 	ProductionPerHour   int64            `json:"productionPerHour,omitempty"`
 	BuildFactorPerMille int64            `json:"buildFactorPerMille,omitempty"`
 	Slots               int              `json:"slots,omitempty"`
+	Capacity            int64            `json:"capacity,omitempty"`
 }
 
 // BuildingConfig - конфиг одного типа здания.
@@ -336,6 +337,9 @@ func (c *Config) validateWorld() error {
 	w := c.World
 	if w.MapSize <= 0 {
 		return fmt.Errorf("world.json: mapSize must be positive")
+	}
+	if w.MapSize%2 == 0 {
+		return fmt.Errorf("world.json: mapSize must be odd so the map center is a cell (coords -mapSize/2..mapSize/2)")
 	}
 	if w.CampCountMin <= 0 || w.CampCountMax < w.CampCountMin {
 		return fmt.Errorf("world.json: invalid camp count range %d..%d", w.CampCountMin, w.CampCountMax)

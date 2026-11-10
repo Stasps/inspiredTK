@@ -120,12 +120,19 @@ type World struct {
 	Marches     map[string]*March   `json:"marches"`
 }
 
-// CellAt возвращает клетку по координатам или nil вне карты.
+// MapHalf - полуразмер карты: логические координаты клеток идут
+// от -MapHalf до +MapHalf по обеим осям, центр карты - (0,0).
+func (w *World) MapHalf() int {
+	return w.MapSize / 2
+}
+
+// CellAt возвращает клетку по логическим координатам или nil вне карты.
 func (w *World) CellAt(x, y int) *Cell {
-	if x < 0 || y < 0 || x >= w.MapSize || y >= w.MapSize {
+	half := w.MapHalf()
+	if x < -half || y < -half || x > half || y > half {
 		return nil
 	}
-	return w.Cells[y*w.MapSize+x]
+	return w.Cells[(y+half)*w.MapSize+(x+half)]
 }
 
 // NextRandom возвращает детерминированное псевдослучайное число [0, n).

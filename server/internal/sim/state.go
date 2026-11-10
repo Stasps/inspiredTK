@@ -3,7 +3,6 @@ package sim
 
 import (
 	"fmt"
-	"time"
 
 	"inspiredtk/server/internal/domain"
 )
@@ -11,6 +10,7 @@ import (
 // VillageState represents complete village state for client broadcast.
 type VillageState struct {
 	ResourcesMilli      map[string]int64 `json:"resourcesMilli"`
+	ProductionPerHour   map[string]int64 `json:"productionPerHour"`
 	Buildings           []BuildingInfo   `json:"buildings"`
 	StationedInfantry   int              `json:"stationedInfantry"`
 	BuildJob            *domain.BuildJob `json:"buildJob,omitempty"`
@@ -36,6 +36,7 @@ func (e *Engine) GetVillageState(villageID string, now int64) (*VillageState, er
 	e.settle(v, now)
 	return &VillageState{
 		ResourcesMilli:      v.ResourcesMilli,
+		ProductionPerHour:   e.productionRate(v),
 		Buildings:           e.AvailableBuildings(v, now),
 		StationedInfantry:   v.StationedInfantry,
 		BuildJob:            v.BuildJob,
@@ -43,6 +44,36 @@ func (e *Engine) GetVillageState(villageID string, now int64) (*VillageState, er
 		TrainNextFinishUnix: v.TrainNextFinishUnix,
 		ServerTimeUnix:      now,
 	}, nil
+}
+
+// productionRate calculates current production per hour for each resource.
+// Base production is 10/hour for all resources, plus building bonuses.
+//
+// Parameters:
+//   - v: village pointer (must be settled)
+//
+// Returns: map of resource ID to production per hour.
+func (e *Engine) productionRate(v *domain.Village) map[string]int64 {
+	rates := make(map[string]int64)
+
+	// Base production: 10/hour for all basic resources
+	for _, res := range e.Cfg.Resources.Resources {
+		rates[res.ID] = 10
+	}
+
+	// Building bonuses
+	for _, bc := range e.Cfg.Buildings.Buildings {
+		if bc.ProductionResource == "" {
+			continue
+		}
+		level := v.Buildings[bc.ID]
+		if level > 0 && level <= len(bc.Levels) {
+			production := bc.Levels[level-1].ProductionPerHour
+			rates[bc.ProductionResource] += production
+		}
+	}
+
+	return rates
 }
 
 // clientState wraps world with village buildings for client broadcast.
