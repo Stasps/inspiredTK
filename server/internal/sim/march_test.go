@@ -14,8 +14,8 @@ func placeCamp(t *testing.T, e *Engine, x, y, army int) *domain.Camp {
 	if cell == nil {
 		t.Fatalf("cell (%d,%d) outside map", x, y)
 	}
-	if cell.VillageID != "" {
-		t.Fatalf("cell (%d,%d) occupied by village", x, y)
+	if cell.SettlementID != "" {
+		t.Fatalf("cell (%d,%d) occupied by settlement", x, y)
 	}
 	if cell.CampID != "" {
 		delete(e.World.Camps, cell.CampID)
@@ -32,10 +32,10 @@ func placeCamp(t *testing.T, e *Engine, x, y, army int) *domain.Camp {
 	return camp
 }
 
-// prepareWarVillage - деревня с 20 пехотинцами и запасом еды.
-func prepareWarVillage(t *testing.T, e *Engine, x, y int, now int64) *domain.Village {
+// prepareWarSettlement - поселение с 20 пехотинцами и запасом еды.
+func prepareWarSettlement(t *testing.T, e *Engine, x, y int, now int64) *domain.Settlement {
 	t.Helper()
-	v := newPlayerVillage(t, e, "p1", x, y, now)
+	v := newPlayerSettlement(t, e, "p1", x, y, now)
 	v.StationedInfantry = 20
 	// Ровно под вместимость продовольственного склада (1000 ед. из конфига).
 	v.ResourcesMilli["food"] = 1_000_000
@@ -44,7 +44,7 @@ func prepareWarVillage(t *testing.T, e *Engine, x, y int, now int64) *domain.Vil
 
 func TestMarchProvisionTiersAndTravelTime(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := prepareWarVillage(t, e, 0, 0, testT0)
+	v := prepareWarSettlement(t, e, 0, 0, testT0)
 
 	cases := []struct {
 		name        string
@@ -87,7 +87,7 @@ func TestMarchProvisionTiersAndTravelTime(t *testing.T) {
 
 func TestCancelMarchRefundsProvisionAndReturnsTroops(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := prepareWarVillage(t, e, 0, 0, testT0)
+	v := prepareWarSettlement(t, e, 0, 0, testT0)
 	placeCamp(t, e, 6, 8, 1)
 
 	id, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 5, testT0)
@@ -111,7 +111,7 @@ func TestCancelMarchRefundsProvisionAndReturnsTroops(t *testing.T) {
 	if len(e.World.Marches) != 1 {
 		t.Fatalf("want 1 return march, got %d", len(e.World.Marches))
 	}
-	e.Tick(testT0 + 200)
+	e.Advance(testT0 + 200)
 	if v.StationedInfantry != 20 {
 		t.Fatalf("troops did not return: %d", v.StationedInfantry)
 	}
@@ -119,7 +119,7 @@ func TestCancelMarchRefundsProvisionAndReturnsTroops(t *testing.T) {
 
 func TestCampBattleVictoryLootAndReturn(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := prepareWarVillage(t, e, 0, 0, testT0)
+	v := prepareWarSettlement(t, e, 0, 0, testT0)
 	camp := placeCamp(t, e, 6, 8, 3)
 
 	id, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 10, testT0)
@@ -127,7 +127,7 @@ func TestCampBattleVictoryLootAndReturn(t *testing.T) {
 		t.Fatalf("send march: %v", err)
 	}
 	arrive := e.World.Marches[id].ArriveUnix
-	e.Tick(arrive)
+	e.Advance(arrive)
 	// Атака 10x10=100 vs защита 3x10x1.5=45: лагерь уничтожен,
 	// потери атакующего floor(10*45/100) = 4.
 	if camp.Infantry != 0 {
@@ -143,19 +143,19 @@ func TestCampBattleVictoryLootAndReturn(t *testing.T) {
 		if m.Type != domain.MarchReturn || m.Infantry != 6 {
 			t.Fatalf("return march: %+v", m)
 		}
-		e.Tick(m.ArriveUnix)
+		e.Advance(m.ArriveUnix)
 	}
 	if v.StationedInfantry != 16 {
 		t.Fatalf("survivors must return home: %d", v.StationedInfantry)
 	}
 	if v.ResourcesMilli["wood"] != 500_000+300_000 {
-		t.Fatalf("loot must reach village storage: %d", v.ResourcesMilli["wood"])
+		t.Fatalf("loot must reach settlement storage: %d", v.ResourcesMilli["wood"])
 	}
 }
 
 func TestMarchFailsWithoutTroopsOrFood(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 0, 0, testT0)
+	v := newPlayerSettlement(t, e, "p1", 0, 0, testT0)
 	placeCamp(t, e, 6, 8, 1)
 	if _, err := e.SendMarch("p1", v.ID, domain.MarchAttack, 6, 8, 1, testT0); err == nil {
 		t.Fatalf("march without troops must fail")
@@ -172,7 +172,7 @@ func TestMarchFailsWithoutTroopsOrFood(t *testing.T) {
 
 func TestSimultaneousSpendsDoNotDoubleCharge(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 0, 0, testT0)
+	v := newPlayerSettlement(t, e, "p1", 0, 0, testT0)
 	v.Buildings = map[string]int{"main": 1, "barracks": 1}
 	// Дерева хватает либо на тренировку (100), либо на лесопилку (40), но не на дюп:
 	// ровно 100 дерева, железа на одного пехотинца.

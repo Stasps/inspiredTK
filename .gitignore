@@ -1,5 +1,6 @@
 # Scratch of agents and skills (session-cleanup writes its digest of private chats here)
 .tmp/
+.obsidian/
 AGENTS.md
 modules/
 task.md

@@ -1,6 +1,7 @@
 // Command server - headless-сервер Inspired Kingdoms (MVP-0).
-// Без клиентского транспорта: процесс грузит конфиги, восстанавливает
-// снапшот, крутит тик симуляции и периодически сохраняет состояние.
+// Процесс грузит конфиги, восстанавливает снапшот и крутит цикл актора
+// симуляции: команды клиентов и события планировщика по таймеру ближайшего
+// события (тика нет), периодически сохраняет состояние.
 package main
 
 import (
@@ -49,7 +50,7 @@ func main() {
 	var world *domain.World
 	if snap != nil {
 		world = snap.World
-		logger.Printf("snapshot restored: tick %d, server time %d", snap.Tick, snap.ServerTimeUnix)
+		logger.Printf("snapshot restored: server time %d, %d scheduled events", snap.ServerTimeUnix, len(world.Events))
 	} else {
 		world = sim.NewWorld(cfg, time.Now().Unix())
 		logger.Printf("new world generated: %dx%d, %d barbarian camps", world.MapSize, world.MapSize, len(world.Camps))
@@ -62,8 +63,14 @@ func main() {
 		if err := createDebugPlayer(engine); err != nil {
 			logger.Printf("debug player: %v", err)
 		} else {
-			logger.Printf("debug player created: village of player %q", debugPlayerID)
+			logger.Printf("debug player created: settlement of player %q", debugPlayerID)
 		}
+	}
+
+	// Догон после простоя сервера: все просроченные события применяются по
+	// порядку (fire_at, seq) до приёма соединений.
+	if n := engine.Advance(time.Now().Unix()); n > 0 {
+		logger.Printf("scheduler: caught up %d overdue events", n)
 	}
 
 	// Initialize WebSocket server; commands are consumed in the main select loop.
@@ -87,26 +94,51 @@ func main() {
 		}
 	}
 
-	tick := time.NewTicker(time.Second)
-	defer tick.Stop()
+	// Таймер планировщика: взводится на ближайшее событие кучи. Пока событий
+	// нет, wakeC равен nil и цикл по нему не просыпается.
+	wake := time.NewTimer(time.Hour)
+	defer wake.Stop()
+	var wakeC <-chan time.Time
+	rearm := func() {
+		wake.Stop()
+		wakeC = nil
+		if next, ok := engine.NextEventUnix(); ok {
+			wake.Reset(max(time.Until(time.Unix(next, 0)), 0))
+			wakeC = wake.C
+		}
+	}
+	rearm()
+
+	// Временная рассылка состояния раз в секунду: debug-клиент не интерполирует
+	// ресурсы и прогресс сам. Симуляцию она не двигает и уйдёт вместе с
+	// адресной рассылкой (GAME/roadmap.md, «транспорт под модель»).
+	pushTick := time.NewTicker(time.Second)
+	defer pushTick.Stop()
 	snapTick := time.NewTicker(time.Duration(cfg.World.SnapshotIntervalSeconds) * time.Second)
 	defer snapTick.Stop()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
-	logger.Printf("started: tick 1s, snapshot every %ds", cfg.World.SnapshotIntervalSeconds)
+	logger.Printf("started: event scheduler, snapshot every %ds", cfg.World.SnapshotIntervalSeconds)
 	for {
 		select {
-		case t := <-tick.C:
-			engine.Tick(t.Unix())
-			wsServer.BroadcastState(stateOf(engine))
+		case <-wakeC:
+			engine.Advance(time.Now().Unix())
+			rearm()
 		case cmd := <-wsServer.CommandChan():
+			// Инвариант: перед командой применены все события с fire_at <= now.
+			engine.Advance(time.Now().Unix())
 			if err := executeCommand(engine, wsServer, cmd); err != nil {
 				logger.Printf("command %s failed: %v", cmd.Name, err)
 				wsServer.Broadcast(transport.MessageTypeError, map[string]string{
 					"error": fmt.Sprintf("command %s: %v", cmd.Name, err),
 				})
 			}
+			// Команда могла поставить событие раньше прежнего ближайшего
+			// (или сдвинуть время в debug-режиме).
+			rearm()
+		case <-pushTick.C:
+			wsServer.BroadcastState(stateOf(engine))
 		case <-snapTick.C:
 			save()
 		case <-sig:
@@ -120,9 +152,9 @@ func main() {
 // debugPlayerID - аккаунт-заглушка, создаваемый в debugMode при пустом мире.
 const debugPlayerID = "debug"
 
-// stateOf собирает состояние для рассылки: мир + состояние деревни debug-игрока.
+// stateOf собирает состояние для рассылки: мир + состояние поселения debug-игрока.
 func stateOf(e *sim.Engine) interface{} {
-	v, err := debugVillage(e)
+	v, err := debugSettlement(e)
 	if err != nil {
 		return e.GetClientState("", time.Now().Unix())
 	}
@@ -137,7 +169,7 @@ func createDebugPlayer(e *sim.Engine) error {
 	bestFree := -1
 	var bestDepositDist, bestFreeDist int64 = -1, -1
 	for i, c := range e.World.Cells {
-		if c.VillageID != "" || c.CampID != "" {
+		if c.SettlementID != "" || c.CampID != "" {
 			continue
 		}
 		dx := int64(c.X)
@@ -161,13 +193,13 @@ func createDebugPlayer(e *sim.Engine) error {
 	return fmt.Errorf("no free cell on the map")
 }
 
-// debugVillage возвращает деревню debug-игрока (первая и единственная).
-func debugVillage(e *sim.Engine) (*domain.Village, error) {
+// debugSettlement возвращает поселение debug-игрока (первая и единственная).
+func debugSettlement(e *sim.Engine) (*domain.Settlement, error) {
 	p, ok := e.World.Players[debugPlayerID]
-	if !ok || len(p.VillageIDs) == 0 {
-		return nil, fmt.Errorf("no debug player village")
+	if !ok || len(p.SettlementIDs) == 0 {
+		return nil, fmt.Errorf("no debug player settlement")
 	}
-	return e.World.Villages[p.VillageIDs[0]], nil
+	return e.World.Settlements[p.SettlementIDs[0]], nil
 }
 
 // executeCommand routes a queued client command to the engine.
@@ -183,7 +215,7 @@ func executeCommand(e *sim.Engine, ws *transport.Server, cmd transport.Command) 
 			}
 			amounts[resID] = amount
 		}
-		v, err := debugVillage(e)
+		v, err := debugSettlement(e)
 		if err != nil {
 			return err
 		}
@@ -193,7 +225,7 @@ func executeCommand(e *sim.Engine, ws *transport.Server, cmd transport.Command) 
 		if !ok || buildingID == "" {
 			return fmt.Errorf("missing building parameter")
 		}
-		v, err := debugVillage(e)
+		v, err := debugSettlement(e)
 		if err != nil {
 			return err
 		}
@@ -207,13 +239,13 @@ func executeCommand(e *sim.Engine, ws *transport.Server, cmd transport.Command) 
 		if !ok || count <= 0 {
 			return fmt.Errorf("invalid count parameter")
 		}
-		v, err := debugVillage(e)
+		v, err := debugSettlement(e)
 		if err != nil {
 			return err
 		}
 		return e.TrainUnits(v.ID, unitType, int(count))
 	case "finish_now":
-		v, err := debugVillage(e)
+		v, err := debugSettlement(e)
 		if err != nil {
 			return err
 		}

@@ -15,25 +15,29 @@ func testWorld() *domain.World {
 		Seed:        42,
 		RngCounter:  7,
 		IDCounter:   3,
-		Tick:        123,
+		EventSeq:    2,
+		Events: []*domain.ScheduledEvent{
+			{ID: "e2", Seq: 2, Kind: domain.EventMarchArrive, EntityType: "march", EntityID: "m1", FireUnix: 1_700_000_600},
+			{ID: "e1", Seq: 1, Kind: domain.EventBuildFinish, EntityType: "settlement", EntityID: "v1", FireUnix: 1_700_010_000},
+		},
 		CreatedUnix: 1_700_000_000,
 		MapSize:     2,
 		Cells: []*domain.Cell{
 			{X: 0, Y: 0, Deposits: []string{"wood"}},
 			{X: 1, Y: 0},
-			{X: 0, Y: 1, VillageID: "v1"},
+			{X: 0, Y: 1, SettlementID: "v1"},
 			{X: 1, Y: 1, CampID: "c1"},
 		},
 		Players: map[string]*domain.Player{
-			"p1": {ID: "p1", Name: "P1", Windows: [2]int{10, 19}, VillageIDs: []string{"v1"}},
+			"p1": {ID: "p1", Name: "P1", Windows: [2]int{10, 19}, SettlementIDs: []string{"v1"}},
 		},
-		Villages: map[string]*domain.Village{
+		Settlements: map[string]*domain.Settlement{
 			"v1": {
 				ID: "v1", PlayerID: "p1", X: 0, Y: 1,
 				Buildings:           map[string]int{"main": 1, "sawmill": 2},
 				ResourcesMilli:      map[string]int64{"wood": 510_000, "food": 999_999},
 				LastSettledUnix:     1_700_003_600,
-				BuildJob:            &domain.BuildJob{BuildingKey: "farm", TargetLevel: 1, FinishUnix: 1_700_010_000},
+				BuildJob:            &domain.BuildJob{BuildingKey: "farm", TargetLevel: 1, FinishUnix: 1_700_010_000, EventID: "e1"},
 				TrainQueueRemaining: 2,
 				TrainNextFinishUnix: 1_700_004_000,
 				StationedInfantry:   5,
@@ -46,8 +50,8 @@ func testWorld() *domain.World {
 			"m1": {
 				ID: "m1", PlayerID: "p1", Type: domain.MarchAttack, Infantry: 4,
 				FromX: 0, FromY: 1, ToX: 1, ToY: 1,
-				OriginVillageID: "v1", TargetCampID: "c1",
-				DepartUnix: 1_700_000_000, ArriveUnix: 1_700_000_600, ProvisionMilli: 40_000,
+				OriginSettlementID: "v1", TargetCampID: "c1",
+				DepartUnix: 1_700_000_000, ArriveUnix: 1_700_000_600, ProvisionMilli: 40_000, EventID: "e2",
 			},
 		},
 	}
@@ -88,8 +92,12 @@ func TestSnapshotHasVersionAndMetadata(t *testing.T) {
 	if loaded.Version != domain.SnapshotVersion {
 		t.Fatalf("version: got %d", loaded.Version)
 	}
-	if loaded.Tick != 123 || loaded.ServerTimeUnix != 1_700_005_000 {
-		t.Fatalf("metadata lost: tick %d, time %d", loaded.Tick, loaded.ServerTimeUnix)
+	if loaded.ServerTimeUnix != 1_700_005_000 {
+		t.Fatalf("metadata lost: time %d", loaded.ServerTimeUnix)
+	}
+	// Планировщик - часть состояния: события и счётчик переживают снапшот.
+	if loaded.World.EventSeq != 2 || len(loaded.World.Events) != 2 {
+		t.Fatalf("scheduler lost: seq %d, %d events", loaded.World.EventSeq, len(loaded.World.Events))
 	}
 }
 
@@ -116,7 +124,7 @@ func TestEventLogAppendsJSONLines(t *testing.T) {
 	var buf strings.Builder
 	log := persistence.NewEventLog(&buf)
 	ev := persistence.BattleEvent{
-		Tick: 1, TimeUnix: 2, Mode: "attack", MarchID: "m1",
+		EventID: "e1", TimeUnix: 2, Mode: "attack", MarchID: "m1",
 		AttackerID: "p1", DefenderID: "c1",
 		AttackerBefore: 10, DefenderBefore: 3,
 		AttackerLosses: 4, DefenderLosses: 3, AttackerWon: true,

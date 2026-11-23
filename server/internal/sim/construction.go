@@ -10,8 +10,8 @@ import (
 // StartConstruction ставит улучшение здания в очередь строительства.
 // Ключ здания - id из конфига; для шахты - "mine:<resource>" по месторождению
 // клетки (механика шахты зафиксирована в GAME/game-design.md).
-func (e *Engine) StartConstruction(playerID, villageID, buildingKey string, now int64) error {
-	v, err := e.ownedVillage(playerID, villageID)
+func (e *Engine) StartConstruction(playerID, settlementID, buildingKey string, now int64) error {
+	v, err := e.ownedSettlement(playerID, settlementID)
 	if err != nil {
 		return err
 	}
@@ -20,7 +20,7 @@ func (e *Engine) StartConstruction(playerID, villageID, buildingKey string, now 
 
 // startConstruction - тело StartConstruction без проверки владения
 // (используется также командой upgrade_building от транспорта).
-func (e *Engine) startConstruction(v *domain.Village, buildingKey string, now int64) error {
+func (e *Engine) startConstruction(v *domain.Settlement, buildingKey string, now int64) error {
 	base, resource := parseBuildingKey(buildingKey)
 	bc, ok := e.Cfg.BuildingByID[base]
 	if !ok {
@@ -28,22 +28,22 @@ func (e *Engine) startConstruction(v *domain.Village, buildingKey string, now in
 	}
 	e.applyConstruction(v, now)
 	if v.BuildJob != nil {
-		return fmt.Errorf("village %s: build queue is busy", v.ID)
+		return fmt.Errorf("settlement %s: build queue is busy", v.ID)
 	}
 	current := v.Buildings[buildingKey]
 	if current >= bc.MaxLevel {
-		return fmt.Errorf("village %s: building %q already at max level %d", v.ID, buildingKey, bc.MaxLevel)
+		return fmt.Errorf("settlement %s: building %q already at max level %d", v.ID, buildingKey, bc.MaxLevel)
 	}
 	if bc.IsMine {
 		if resource == "" {
-			return fmt.Errorf("village %s: mine requires a deposit resource, e.g. \"mine:stone\"", v.ID)
+			return fmt.Errorf("settlement %s: mine requires a deposit resource, e.g. \"mine:stone\"", v.ID)
 		}
 		if _, ok := e.Cfg.ResourceByID[resource]; !ok {
-			return fmt.Errorf("village %s: unknown deposit resource %q", v.ID, resource)
+			return fmt.Errorf("settlement %s: unknown deposit resource %q", v.ID, resource)
 		}
 		cell := e.World.CellAt(v.X, v.Y)
 		if cell == nil || !cell.HasDeposit(resource) {
-			return fmt.Errorf("village %s: no %s deposit at (%d,%d)", v.ID, resource, v.X, v.Y)
+			return fmt.Errorf("settlement %s: no %s deposit at (%d,%d)", v.ID, resource, v.X, v.Y)
 		}
 	}
 	target := current + 1
@@ -52,17 +52,19 @@ func (e *Engine) startConstruction(v *domain.Village, buildingKey string, now in
 	if err := e.spend(v, lvl.Cost, 1); err != nil {
 		return err
 	}
+	finish := now + e.effectiveBuildSeconds(v, lvl.BuildSeconds)
 	v.BuildJob = &domain.BuildJob{
 		BuildingKey: buildingKey,
 		TargetLevel: target,
-		FinishUnix:  now + e.effectiveBuildSeconds(v, lvl.BuildSeconds),
+		FinishUnix:  finish,
+		EventID:     e.schedule(domain.EventBuildFinish, v.ID, finish),
 	}
 	return nil
 }
 
 // effectiveBuildSeconds применяет ускорение строительства от уровня
 // главного здания (фактор в промилле из конфига).
-func (e *Engine) effectiveBuildSeconds(v *domain.Village, baseSeconds int64) int64 {
+func (e *Engine) effectiveBuildSeconds(v *domain.Settlement, baseSeconds int64) int64 {
 	factor := int64(1000)
 	if mainLevel := v.Buildings["main"]; mainLevel > 0 {
 		if mc, ok := e.Cfg.BuildingByID["main"]; ok {
@@ -78,20 +80,28 @@ func (e *Engine) effectiveBuildSeconds(v *domain.Village, baseSeconds int64) int
 	return secs
 }
 
-// applyConstruction завершает стройку, если её время вышло. Производство
-// до момента завершения считается по старому уровню.
-func (e *Engine) applyConstruction(v *domain.Village, now int64) {
+// applyConstruction завершает стройку, если её время вышло (ленивый путь:
+// чтение или команда пришли раньше события планировщика с тем же временем).
+func (e *Engine) applyConstruction(v *domain.Settlement, now int64) {
 	job := v.BuildJob
 	if job == nil || now < job.FinishUnix {
 		return
 	}
+	e.completeConstruction(v)
+}
+
+// completeConstruction завершает активную стройку. Производство до момента
+// завершения считается по старому уровню. Событие планировщика, оставшееся
+// от завершённой стройки, отбрасывается по несовпадению id.
+func (e *Engine) completeConstruction(v *domain.Settlement) {
+	job := v.BuildJob
 	e.settle(v, job.FinishUnix)
 	v.Buildings[job.BuildingKey] = job.TargetLevel
 	v.BuildJob = nil
 }
 
 // slotsCapacity - лимит слотов юнитов: казарма и амбар дают слоты за уровень.
-func (e *Engine) slotsCapacity(v *domain.Village) int {
+func (e *Engine) slotsCapacity(v *domain.Settlement) int {
 	total := 0
 	for key, level := range v.Buildings {
 		if level <= 0 {
@@ -110,11 +120,11 @@ func (e *Engine) slotsCapacity(v *domain.Village) int {
 }
 
 // StartTraining ставит пехотинцев в очередь тренировки казармы.
-func (e *Engine) StartTraining(playerID, villageID string, count int, now int64) error {
+func (e *Engine) StartTraining(playerID, settlementID string, count int, now int64) error {
 	if count <= 0 {
 		return errors.New("training count must be positive")
 	}
-	v, err := e.ownedVillage(playerID, villageID)
+	v, err := e.ownedSettlement(playerID, settlementID)
 	if err != nil {
 		return err
 	}
@@ -122,14 +132,14 @@ func (e *Engine) StartTraining(playerID, villageID string, count int, now int64)
 }
 
 // startTraining - тело StartTraining без проверки владения.
-func (e *Engine) startTraining(v *domain.Village, count int, now int64) error {
+func (e *Engine) startTraining(v *domain.Settlement, count int, now int64) error {
 	e.applyConstruction(v, now)
 	e.applyTraining(v, now)
 	if v.Buildings["barracks"] < 1 {
-		return fmt.Errorf("village %s: barracks level 1 required for training", v.ID)
+		return fmt.Errorf("settlement %s: barracks level 1 required for training", v.ID)
 	}
 	if v.StationedInfantry+v.TrainQueueRemaining+count > e.slotsCapacity(v) {
-		return fmt.Errorf("village %s: not enough unit slots", v.ID)
+		return fmt.Errorf("settlement %s: not enough unit slots", v.ID)
 	}
 	uc := e.Cfg.UnitByID["infantry"]
 	e.settle(v, now)
@@ -144,7 +154,7 @@ func (e *Engine) startTraining(v *domain.Village, count int, now int64) error {
 }
 
 // applyTraining переносит натренировавшихся юнитов в гарнизон.
-func (e *Engine) applyTraining(v *domain.Village, now int64) {
+func (e *Engine) applyTraining(v *domain.Settlement, now int64) {
 	uc := e.Cfg.UnitByID["infantry"]
 	for v.TrainQueueRemaining > 0 && now >= v.TrainNextFinishUnix {
 		v.TrainQueueRemaining--
@@ -158,12 +168,12 @@ func (e *Engine) applyTraining(v *domain.Village, now int64) {
 
 // InstantComplete - тестовый режим «завершить немедленно»
 // (GAME/game-design.md, «Тестовый режим (MVP-0)»): мгновенно завершает
-// строительство и тренировку в деревне. Доступно только при debugMode.
-func (e *Engine) InstantComplete(playerID, villageID string, now int64) error {
+// строительство и тренировку в поселении. Доступно только при debugMode.
+func (e *Engine) InstantComplete(playerID, settlementID string, now int64) error {
 	if !e.Cfg.World.DebugMode {
 		return errors.New("instant complete is disabled: debugMode is off")
 	}
-	v, err := e.ownedVillage(playerID, villageID)
+	v, err := e.ownedSettlement(playerID, settlementID)
 	if err != nil {
 		return err
 	}

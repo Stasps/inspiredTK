@@ -36,7 +36,7 @@ func (e *Engine) SkipTime(seconds int64) error {
 		}
 		return t
 	}
-	for _, v := range e.World.Villages {
+	for _, v := range e.World.Settlements {
 		v.LastSettledUnix = shift(v.LastSettledUnix)
 		if v.BuildJob != nil {
 			v.BuildJob.FinishUnix = shift(v.BuildJob.FinishUnix)
@@ -53,6 +53,9 @@ func (e *Engine) SkipTime(seconds int64) error {
 		c.NextAttackUnix = shift(c.NextAttackUnix)
 		c.ScheduledDepartUnix = shift(c.ScheduledDepartUnix)
 	}
+	// События планировщика сдвигаются вместе с дедлайнами сущностей;
+	// просроченные применит ближайший Advance.
+	e.shiftSchedule(shift)
 	return nil
 }
 
@@ -65,15 +68,15 @@ type BuildingInfo struct {
 	Cost       map[string]int64 `json:"cost,omitempty"`
 }
 
-// AvailableBuildings returns all buildings from config with their village state.
+// AvailableBuildings returns all buildings from config with their settlement state.
 // Mines (isMine) are expanded into one element per cell deposit: "mine:stone", etc.
 //
 // Parameters:
-//   - v: village pointer (must be settled)
+//   - v: settlement pointer (must be settled)
 //   - now: current server unix timestamp
 //
 // Returns: slice of BuildingInfo for all buildings.
-func (e *Engine) AvailableBuildings(v *domain.Village, now int64) []BuildingInfo {
+func (e *Engine) AvailableBuildings(v *domain.Settlement, now int64) []BuildingInfo {
 	e.applyConstruction(v, now)
 	e.applyTraining(v, now)
 	e.settle(v, now)
@@ -107,15 +110,15 @@ func (e *Engine) AvailableBuildings(v *domain.Village, now int64) []BuildingInfo
 	return infos
 }
 
-// canAfford checks if village has enough resources for cost.
-// Village must be settled before this call.
+// canAfford checks if settlement has enough resources for cost.
+// Settlement must be settled before this call.
 //
 // Parameters:
-//   - v: village pointer
+//   - v: settlement pointer
 //   - cost: resource costs in whole units
 //
-// Returns: true if village can afford the cost.
-func (e *Engine) canAfford(v *domain.Village, cost map[string]int64) bool {
+// Returns: true if settlement can afford the cost.
+func (e *Engine) canAfford(v *domain.Settlement, cost map[string]int64) bool {
 	for resID, amount := range cost {
 		if _, ok := e.Cfg.ResourceByID[resID]; !ok {
 			return false
@@ -131,7 +134,7 @@ func (e *Engine) canAfford(v *domain.Village, cost map[string]int64) bool {
 type MapCell struct {
 	X        int    `json:"x"`
 	Y        int    `json:"y"`
-	Type     string `json:"type"` // "empty", "village", "camp", "deposit"
+	Type     string `json:"type"` // "empty", "settlement", "camp", "deposit"
 	ID       string `json:"id,omitempty"`
 	Owner    string `json:"owner,omitempty"`
 	Resource string `json:"resource,omitempty"` // for deposit: wood, stone, iron
@@ -145,10 +148,10 @@ func (e *Engine) GetMap() []MapCell {
 	for _, c := range e.World.Cells {
 		mc := MapCell{X: c.X, Y: c.Y, Type: "empty"}
 		switch {
-		case c.VillageID != "":
-			mc.Type = "village"
-			mc.ID = c.VillageID
-			if v, ok := e.World.Villages[c.VillageID]; ok {
+		case c.SettlementID != "":
+			mc.Type = "settlement"
+			mc.ID = c.SettlementID
+			if v, ok := e.World.Settlements[c.SettlementID]; ok {
 				mc.Owner = v.PlayerID
 			}
 		case c.CampID != "":
@@ -163,22 +166,22 @@ func (e *Engine) GetMap() []MapCell {
 	return cells
 }
 
-// AddResources adds resources to village (debug command add_resources).
+// AddResources adds resources to settlement (debug command add_resources).
 // Amounts are in whole units (not milli). No storage capacity check.
 // Only available when debugMode is enabled.
 //
 // Parameters:
-//   - villageID: village identifier
+//   - settlementID: settlement identifier
 //   - amounts: map of resource ID to amount in whole units
 //
-// Returns: error if debugMode is off, village not found, or unknown resource.
-func (e *Engine) AddResources(villageID string, amounts map[string]int64) error {
+// Returns: error if debugMode is off, settlement not found, or unknown resource.
+func (e *Engine) AddResources(settlementID string, amounts map[string]int64) error {
 	if !e.Cfg.World.DebugMode {
 		return fmt.Errorf("add_resources is disabled: debugMode is off")
 	}
-	v, ok := e.World.Villages[villageID]
+	v, ok := e.World.Settlements[settlementID]
 	if !ok {
-		return fmt.Errorf("unknown village %q", villageID)
+		return fmt.Errorf("unknown settlement %q", settlementID)
 	}
 	e.settle(v, time.Now().Unix())
 	for resID, units := range amounts {
@@ -196,14 +199,14 @@ func (e *Engine) AddResources(villageID string, amounts map[string]int64) error 
 // for mines - "mine:<resource>" by cell deposit.
 //
 // Parameters:
-//   - villageID: village identifier
+//   - settlementID: settlement identifier
 //   - buildingID: building config ID or "mine:<resource>" for mines
 //
-// Returns: error if village not found or construction cannot start.
-func (e *Engine) UpgradeBuilding(villageID, buildingID string) error {
-	v, ok := e.World.Villages[villageID]
+// Returns: error if settlement not found or construction cannot start.
+func (e *Engine) UpgradeBuilding(settlementID, buildingID string) error {
+	v, ok := e.World.Settlements[settlementID]
 	if !ok {
-		return fmt.Errorf("unknown village %q", villageID)
+		return fmt.Errorf("unknown settlement %q", settlementID)
 	}
 	return e.startConstruction(v, buildingID, time.Now().Unix())
 }
@@ -212,15 +215,15 @@ func (e *Engine) UpgradeBuilding(villageID, buildingID string) error {
 // Units appear in garrison after each unit's training time.
 //
 // Parameters:
-//   - villageID: village identifier
+//   - settlementID: settlement identifier
 //   - unitType: unit config ID
 //   - count: number of units to train
 //
-// Returns: error if village not found, unknown unit, or training cannot start.
-func (e *Engine) TrainUnits(villageID, unitType string, count int) error {
-	v, ok := e.World.Villages[villageID]
+// Returns: error if settlement not found, unknown unit, or training cannot start.
+func (e *Engine) TrainUnits(settlementID, unitType string, count int) error {
+	v, ok := e.World.Settlements[settlementID]
 	if !ok {
-		return fmt.Errorf("unknown village %q", villageID)
+		return fmt.Errorf("unknown settlement %q", settlementID)
 	}
 	if _, ok := e.Cfg.UnitByID[unitType]; !ok {
 		return fmt.Errorf("unknown unit %q", unitType)

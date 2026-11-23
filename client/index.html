@@ -27,7 +27,7 @@
             --debug-bg: #3a2e10;
             --debug-border: #f0a500;
             --cell-empty: #1b2f1c;
-            --cell-village: #66bb6a;
+            --cell-settlement: #66bb6a;
             --cell-camp: #ef5350;
             --cell-deposit: #ffb300;
         }
@@ -49,7 +49,7 @@
             --debug-bg: #3a2e10;
             --debug-border: #f0a500;
             --cell-empty: #16213e;
-            --cell-village: #51cf66;
+            --cell-settlement: #51cf66;
             --cell-camp: #e94560;
             --cell-deposit: #f0a500;
         }
@@ -71,7 +71,7 @@
             --debug-bg: #fff9c4;
             --debug-border: #f57f17;
             --cell-empty: #d7ccc8;
-            --cell-village: #2e7d32;
+            --cell-settlement: #2e7d32;
             --cell-camp: #c62828;
             --cell-deposit: #f57f17;
         }
@@ -315,7 +315,7 @@
             z-index: 10;
         }
         .map-cell.empty { background: var(--cell-empty); }
-        .map-cell.village { background: var(--cell-village); }
+        .map-cell.settlement { background: var(--cell-settlement); }
         .map-cell.camp { background: var(--cell-camp); }
         .map-cell.deposit { background: var(--cell-deposit); }
 
@@ -369,7 +369,7 @@
             <span class="header-production" id="prod-food">+0/ч</span>
         </div>
 
-        <a href="#main" class="nav-link" data-page="main">🏠 Деревня</a>
+        <a href="#main" class="nav-link" data-page="main">🏠 Поселение</a>
         <a href="#map" class="nav-link" data-page="map">🗺️ Карта</a>
 
         <div class="theme-selector">
@@ -438,7 +438,7 @@
             </div>
 
             <div class="map-legend">
-                <span><span class="swatch" style="background:var(--cell-village)"></span>Деревня</span>
+                <span><span class="swatch" style="background:var(--cell-settlement)"></span>Поселение</span>
                 <span><span class="swatch" style="background:var(--cell-camp)"></span>Лагерь</span>
                 <span><span class="swatch" style="background:var(--cell-deposit)"></span>Месторождение</span>
                 <span><span class="swatch" style="background:var(--cell-empty)"></span>Пусто</span>
@@ -487,7 +487,7 @@
             });
             document.title = page === 'map'
                 ? 'Inspired Kingdoms - Карта'
-                : 'Inspired Kingdoms - Деревня';
+                : 'Inspired Kingdoms - Поселение';
             // WebSocket не останавливаем: страница карты просто скрывается.
             if (page === 'map') {
                 if (mapData) {
@@ -589,17 +589,17 @@
             ws.send(JSON.stringify(msg));
         }
 
-        // ===== Main page: village state =====
+        // ===== Main page: settlement state =====
         function updateState(state) {
-            const villages = state.villages ? Object.values(state.villages) : [];
+            const settlements = state.settlements ? Object.values(state.settlements) : [];
 
-            const serverNow = state.village?.serverTimeUnix || Math.floor(Date.now() / 1000);
+            const serverNow = state.settlement?.serverTimeUnix || Math.floor(Date.now() / 1000);
             document.getElementById('server-time').textContent = new Date(serverNow * 1000).toLocaleTimeString();
 
-            if (villages.length === 0) {
+            if (settlements.length === 0) {
                 return;
             }
-            const v = villages[0];
+            const v = settlements[0];
 
             // Resources
             const rm = v.resourcesMilli || {};
@@ -609,14 +609,14 @@
             document.getElementById('res-food').textContent = Math.floor((rm.food || 0) / 1000);
 
             // Production per hour
-            const prod = state.village?.productionPerHour || {};
+            const prod = state.settlement?.productionPerHour || {};
             document.getElementById('prod-wood').textContent = '+' + (prod.wood || 0) + '/ч';
             document.getElementById('prod-stone').textContent = '+' + (prod.stone || 0) + '/ч';
             document.getElementById('prod-iron').textContent = '+' + (prod.iron || 0) + '/ч';
             document.getElementById('prod-food').textContent = '+' + (prod.food || 0) + '/ч';
 
             // Buildings
-            updateBuildings(state.village?.buildings || state.buildings || []);
+            updateBuildings(state.settlement?.buildings || state.buildings || []);
 
             // Army
             document.getElementById('unit-infantry').textContent = v.stationedInfantry || 0;
@@ -650,16 +650,16 @@
             el.classList.remove('hidden');
         }
 
-        function updateTrainProgress(village, serverNow) {
+        function updateTrainProgress(settlement, serverNow) {
             const el = document.getElementById('train-progress');
-            if (!village.trainQueueRemaining || village.trainQueueRemaining <= 0) {
+            if (!settlement.trainQueueRemaining || settlement.trainQueueRemaining <= 0) {
                 el.classList.add('hidden');
                 return;
             }
 
-            const remaining = village.trainNextFinishUnix - serverNow;
+            const remaining = settlement.trainNextFinishUnix - serverNow;
 
-            document.getElementById('train-count').textContent = village.trainQueueRemaining;
+            document.getElementById('train-count').textContent = settlement.trainQueueRemaining;
             document.getElementById('train-remaining').textContent = remaining > 0 ? remaining : 0;
             el.classList.remove('hidden');
         }
@@ -811,8 +811,8 @@
             let text = `(${x}, ${y}) - `;
 
             switch (cell.type) {
-                case 'village':
-                    text += `деревня ${cell.id}`;
+                case 'settlement':
+                    text += `поселение ${cell.id}`;
                     if (cell.owner) text += ` (владелец: ${cell.owner})`;
                     break;
                 case 'camp':

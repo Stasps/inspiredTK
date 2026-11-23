@@ -17,7 +17,7 @@ import (
 	"inspiredtk/server/internal/util"
 )
 
-// Engine выполняет команды и тики над состоянием мира.
+// Engine выполняет команды и события планировщика над состоянием мира.
 type Engine struct {
 	Cfg    *config.Config
 	World  *domain.World
@@ -30,7 +30,9 @@ type Engine struct {
 //   - world: состояние мира (новое или восстановленное из снапшота)
 //   - events: журнал критичных событий
 func NewEngine(cfg *config.Config, world *domain.World, events *persistence.EventLog) *Engine {
-	return &Engine{Cfg: cfg, World: world, events: events}
+	e := &Engine{Cfg: cfg, World: world, events: events}
+	e.restoreSchedule()
+	return e
 }
 
 func (e *Engine) newID(prefix string) string {
@@ -44,7 +46,7 @@ func (e *Engine) logBattle(m *domain.March, defenderID string, defBefore int, ou
 		attackerID = m.OriginCampID
 	}
 	err := e.events.LogBattle(persistence.BattleEvent{
-		Tick:           e.World.Tick,
+		EventID:        m.EventID,
 		TimeUnix:       now,
 		Mode:           string(m.Type),
 		MarchID:        m.ID,
@@ -80,19 +82,19 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// ownedVillage возвращает деревню, если она принадлежит игроку.
-func (e *Engine) ownedVillage(playerID, villageID string) (*domain.Village, error) {
-	v, ok := e.World.Villages[villageID]
+// ownedSettlement возвращает поселение, если она принадлежит игроку.
+func (e *Engine) ownedSettlement(playerID, settlementID string) (*domain.Settlement, error) {
+	v, ok := e.World.Settlements[settlementID]
 	if !ok {
-		return nil, fmt.Errorf("unknown village %q", villageID)
+		return nil, fmt.Errorf("unknown settlement %q", settlementID)
 	}
 	if v.PlayerID != playerID {
-		return nil, fmt.Errorf("village %q does not belong to player %q", villageID, playerID)
+		return nil, fmt.Errorf("settlement %q does not belong to player %q", settlementID, playerID)
 	}
 	return v, nil
 }
 
-// CreatePlayer регистрирует игрока и ставит его стартовую деревню на клетку.
+// CreatePlayer регистрирует игрока и ставит его стартовую поселение на клетку.
 // Parameters:
 //   - id, name: идентификатор и имя аккаунта
 //   - x, y: выбранная игроком клетка карты
@@ -114,16 +116,16 @@ func (e *Engine) CreatePlayer(id, name string, x, y, window1, window2 int, now i
 	if cell == nil {
 		return fmt.Errorf("player %q: cell (%d,%d) is outside the map", id, x, y)
 	}
-	if cell.VillageID != "" || cell.CampID != "" {
+	if cell.SettlementID != "" || cell.CampID != "" {
 		return fmt.Errorf("player %q: cell (%d,%d) is occupied", id, x, y)
 	}
 	resources := make(map[string]int64, len(e.Cfg.Resources.Resources))
 	for _, rc := range e.Cfg.Resources.Resources {
 		resources[rc.ID] = util.UnitsToMilli(e.Cfg.World.StartResources[rc.ID])
 	}
-	villageID := e.newID("v")
-	e.World.Villages[villageID] = &domain.Village{
-		ID:              villageID,
+	settlementID := e.newID("v")
+	e.World.Settlements[settlementID] = &domain.Settlement{
+		ID:              settlementID,
 		PlayerID:        id,
 		X:               x,
 		Y:               y,
@@ -135,9 +137,9 @@ func (e *Engine) CreatePlayer(id, name string, x, y, window1, window2 int, now i
 		ID:         id,
 		Name:       name,
 		Windows:    [2]int{window1, window2},
-		VillageIDs: []string{villageID},
+		SettlementIDs: []string{settlementID},
 	}
-	cell.VillageID = villageID
+	cell.SettlementID = settlementID
 	return nil
 }
 

@@ -7,8 +7,8 @@ import (
 	"inspiredtk/server/internal/domain"
 )
 
-// VillageState represents complete village state for client broadcast.
-type VillageState struct {
+// SettlementState represents complete settlement state for client broadcast.
+type SettlementState struct {
 	ResourcesMilli      map[string]int64 `json:"resourcesMilli"`
 	ProductionPerHour   map[string]int64 `json:"productionPerHour"`
 	Buildings           []BuildingInfo   `json:"buildings"`
@@ -19,22 +19,22 @@ type VillageState struct {
 	ServerTimeUnix      int64            `json:"serverTimeUnix"`
 }
 
-// GetVillageState returns complete village state for client broadcast.
+// GetSettlementState returns complete settlement state for client broadcast.
 // Includes resources, buildings, army, and active jobs with server time
 // for client-side progress calculation.
 //
 // Parameters:
-//   - villageID: village identifier
+//   - settlementID: settlement identifier
 //   - now: current server unix timestamp
 //
-// Returns: VillageState pointer or error if village not found.
-func (e *Engine) GetVillageState(villageID string, now int64) (*VillageState, error) {
-	v, ok := e.World.Villages[villageID]
+// Returns: SettlementState pointer or error if settlement not found.
+func (e *Engine) GetSettlementState(settlementID string, now int64) (*SettlementState, error) {
+	v, ok := e.World.Settlements[settlementID]
 	if !ok {
-		return nil, fmt.Errorf("unknown village %q", villageID)
+		return nil, fmt.Errorf("unknown settlement %q", settlementID)
 	}
 	e.settle(v, now)
-	return &VillageState{
+	return &SettlementState{
 		ResourcesMilli:      v.ResourcesMilli,
 		ProductionPerHour:   e.productionRate(v),
 		Buildings:           e.AvailableBuildings(v, now),
@@ -50,10 +50,10 @@ func (e *Engine) GetVillageState(villageID string, now int64) (*VillageState, er
 // Base production is 10/hour for all resources, plus building bonuses.
 //
 // Parameters:
-//   - v: village pointer (must be settled)
+//   - v: settlement pointer (must be settled)
 //
 // Returns: map of resource ID to production per hour.
-func (e *Engine) productionRate(v *domain.Village) map[string]int64 {
+func (e *Engine) productionRate(v *domain.Settlement) map[string]int64 {
 	rates := make(map[string]int64)
 
 	// Base production: 10/hour for all basic resources
@@ -76,25 +76,25 @@ func (e *Engine) productionRate(v *domain.Village) map[string]int64 {
 	return rates
 }
 
-// clientState wraps world with village buildings for client broadcast.
+// clientState wraps world with settlement buildings for client broadcast.
 type clientState struct {
 	*domain.World
-	Village *VillageState `json:"village,omitempty"`
+	Settlement *SettlementState `json:"settlement,omitempty"`
 }
 
 // GetClientState returns complete state for client broadcast.
-// If villageID is empty, returns world only without village details.
+// If settlementID is empty, returns world only without settlement details.
 //
 // Parameters:
-//   - villageID: village identifier (optional)
+//   - settlementID: settlement identifier (optional)
 //   - now: current server unix timestamp
 //
 // Returns: clientState for broadcast.
-func (e *Engine) GetClientState(villageID string, now int64) interface{} {
+func (e *Engine) GetClientState(settlementID string, now int64) interface{} {
 	s := clientState{World: e.World}
-	if villageID != "" {
-		if v, err := e.GetVillageState(villageID, now); err == nil {
-			s.Village = v
+	if settlementID != "" {
+		if v, err := e.GetSettlementState(settlementID, now); err == nil {
+			s.Settlement = v
 		}
 	}
 	return s

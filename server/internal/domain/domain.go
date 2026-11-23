@@ -17,7 +17,7 @@ type Cell struct {
 	X         int      `json:"x"`
 	Y         int      `json:"y"`
 	Deposits  []string `json:"deposits"`
-	VillageID string   `json:"villageId,omitempty"`
+	SettlementID string   `json:"settlementId,omitempty"`
 	CampID    string   `json:"campId,omitempty"`
 }
 
@@ -37,19 +37,21 @@ type Player struct {
 	ID         string   `json:"id"`
 	Name       string   `json:"name"`
 	Windows    [2]int   `json:"windows"`
-	VillageIDs []string `json:"villageIds"`
+	SettlementIDs []string `json:"settlementIds"`
 }
 
-// BuildJob - активное строительство (один слот на деревню).
+// BuildJob - активное строительство (один слот на поселение).
 type BuildJob struct {
 	BuildingKey string `json:"buildingKey"`
 	TargetLevel int    `json:"targetLevel"`
 	StartUnix    int64  `json:"startUnix"`
 	FinishUnix   int64  `json:"finishUnix"`
+	// EventID - id события планировщика, которое завершит стройку.
+	EventID string `json:"eventId,omitempty"`
 }
 
-// Village - деревня игрока. ResourcesMilli - остатки ресурсов в милли-единицах.
-type Village struct {
+// Settlement - поселение игрока. ResourcesMilli - остатки ресурсов в милли-единицах.
+type Settlement struct {
 	ID                  string           `json:"id"`
 	PlayerID            string           `json:"playerId"`
 	X                   int              `json:"x"`
@@ -83,14 +85,16 @@ type March struct {
 	FromY           int              `json:"fromY"`
 	ToX             int              `json:"toX"`
 	ToY             int              `json:"toY"`
-	OriginVillageID string           `json:"originVillageId,omitempty"`
+	OriginSettlementID string           `json:"originSettlementId,omitempty"`
 	OriginCampID    string           `json:"originCampId,omitempty"`
-	TargetVillageID string           `json:"targetVillageId,omitempty"`
+	TargetSettlementID string           `json:"targetSettlementId,omitempty"`
 	TargetCampID    string           `json:"targetCampId,omitempty"`
 	DepartUnix      int64            `json:"departUnix"`
 	ArriveUnix      int64            `json:"arriveUnix"`
 	ProvisionMilli  int64            `json:"provisionMilli"`
 	LootMilli       map[string]int64 `json:"lootMilli,omitempty"`
+	// EventID - id события планировщика о прибытии марша.
+	EventID string `json:"eventId,omitempty"`
 }
 
 // Camp - статичный лагерь варваров (PvE, MVP-0).
@@ -102,7 +106,32 @@ type Camp struct {
 	StockMilli          map[string]int64 `json:"stockMilli"`
 	NextAttackUnix      int64            `json:"nextAttackUnix"`
 	ScheduledDepartUnix int64            `json:"scheduledDepartUnix"`
-	TargetVillageID     string           `json:"targetVillageId,omitempty"`
+	TargetSettlementID     string           `json:"targetSettlementId,omitempty"`
+	// EventID - id ожидающего события планировщика; пусто, если лагерь
+	// простаивает (нет войск и нет запланированной атаки).
+	EventID string `json:"eventId,omitempty"`
+}
+
+// EventKind - вид события планировщика.
+type EventKind string
+
+// Виды событий планировщика.
+const (
+	EventBuildFinish EventKind = "build_finish" // завершение стройки в поселении
+	EventMarchArrive EventKind = "march_arrive" // прибытие марша
+	EventCampAct     EventKind = "camp_act"     // лагерь планирует или отправляет атаку
+)
+
+// ScheduledEvent - запись планировщика: «жёсткий» дедлайн сущности
+// (GAME/save-structure.md, «scheduled event»). Порядок срабатывания -
+// по (FireUnix, Seq), поэтому он одинаков после любого перезапуска.
+type ScheduledEvent struct {
+	ID         string    `json:"id"`
+	Seq        int64     `json:"seq"`
+	Kind       EventKind `json:"kind"`
+	EntityType string    `json:"entityType"`
+	EntityID   string    `json:"entityId"`
+	FireUnix   int64     `json:"fireUnix"`
 }
 
 // World - полное состояние симуляции.
@@ -110,12 +139,15 @@ type World struct {
 	Seed        int64               `json:"seed"`
 	RngCounter  int64               `json:"rngCounter"`
 	IDCounter   int64               `json:"idCounter"`
-	Tick        int64               `json:"tick"`
+	// EventSeq - счётчик событий планировщика; Events - его min-heap
+	// по (FireUnix, Seq). Куча лежит в состоянии и попадает в снапшот.
+	EventSeq    int64               `json:"eventSeq"`
+	Events      []*ScheduledEvent   `json:"events"`
 	CreatedUnix int64               `json:"createdUnix"`
 	MapSize     int                 `json:"mapSize"`
 	Cells       []*Cell             `json:"cells"`
 	Players     map[string]*Player  `json:"players"`
-	Villages    map[string]*Village `json:"villages"`
+	Settlements    map[string]*Settlement `json:"settlements"`
 	Camps       map[string]*Camp    `json:"camps"`
 	Marches     map[string]*March   `json:"marches"`
 }

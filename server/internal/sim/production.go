@@ -8,18 +8,18 @@ import (
 	"inspiredtk/server/internal/util"
 )
 
-// settle досчитывает производство деревни по прошедшему серверному времени
+// settle досчитывает производство поселения по прошедшему серверному времени
 // (лениво, по формуле - не циклом по тикам, см. GAME/quality-attributes.md).
-// Вызывается перед любым чтением/списанием ресурсов деревни, поэтому
+// Вызывается перед любым чтением/списанием ресурсов поселения, поэтому
 // начисление и трата атомарны в одном расчёте - без дюпов.
 // Порядок обхода зданий отсортирован: итог при переполнении склада
 // детерминирован.
-func (e *Engine) settle(v *domain.Village, now int64) {
+func (e *Engine) settle(v *domain.Settlement, now int64) {
 	if now <= v.LastSettledUnix {
 		return
 	}
 	dt := now - v.LastSettledUnix
-	// Базовая выработка: каждая деревня производит немного каждого ресурса
+	// Базовая выработка: каждая поселение производит немного каждого ресурса
 	// даже без зданий (GAME/game-design.md, MVP-0).
 	if base := e.Cfg.World.BaseProductionPerHour; base > 0 {
 		baseMilli := util.PerHourToMilli(base)
@@ -54,7 +54,7 @@ func (e *Engine) settle(v *domain.Village, now int64) {
 // addCapped добавляет ресурс с обрезкой по вместимости склада своей категории
 // (продовольственный / непродовольственный, общий объём внутри категории).
 // Переполнение в MVP-0 обрезается; гниение - MVP-1.
-func (e *Engine) addCapped(v *domain.Village, resourceID string, amountMilli int64) {
+func (e *Engine) addCapped(v *domain.Settlement, resourceID string, amountMilli int64) {
 	if amountMilli <= 0 {
 		return
 	}
@@ -83,7 +83,7 @@ func (e *Engine) addCapped(v *domain.Village, resourceID string, amountMilli int
 
 // spend атомарно списывает стоимость: сначала проверка всех ресурсов,
 // потом списание. При нехватке состояние не меняется.
-func (e *Engine) spend(v *domain.Village, cost map[string]int64, multiplier int64) error {
+func (e *Engine) spend(v *domain.Settlement, cost map[string]int64, multiplier int64) error {
 	keys := make([]string, 0, len(cost))
 	for resID := range cost {
 		keys = append(keys, resID)
@@ -92,7 +92,7 @@ func (e *Engine) spend(v *domain.Village, cost map[string]int64, multiplier int6
 	for _, resID := range keys {
 		need := cost[resID] * multiplier * util.MilliPerUnit
 		if v.ResourcesMilli[resID] < need {
-			return fmt.Errorf("village %s: insufficient %s: need %d milli, have %d milli",
+			return fmt.Errorf("settlement %s: insufficient %s: need %d milli, have %d milli",
 				v.ID, resID, need, v.ResourcesMilli[resID])
 		}
 	}

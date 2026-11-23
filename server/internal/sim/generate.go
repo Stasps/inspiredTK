@@ -22,9 +22,10 @@ func NewWorld(cfg *config.Config, now int64) *domain.World {
 		MapSize:     size,
 		Cells:       make([]*domain.Cell, 0, size*size),
 		Players:     map[string]*domain.Player{},
-		Villages:    map[string]*domain.Village{},
+		Settlements:    map[string]*domain.Settlement{},
 		Camps:       map[string]*domain.Camp{},
 		Marches:     map[string]*domain.March{},
+		Events:      []*domain.ScheduledEvent{},
 	}
 	for y := -half; y <= half; y++ {
 		for x := -half; x <= half; x++ {
@@ -76,7 +77,7 @@ func findFreeCell(w *domain.World) *domain.Cell {
 		x := int(w.NextRandom(int64(w.MapSize))) - half
 		y := int(w.NextRandom(int64(w.MapSize))) - half
 		cell := w.CellAt(x, y)
-		if cell.CampID == "" && cell.VillageID == "" {
+		if cell.CampID == "" && cell.SettlementID == "" {
 			return cell
 		}
 	}

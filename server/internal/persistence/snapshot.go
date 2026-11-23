@@ -14,10 +14,10 @@ import (
 )
 
 // Snapshot - снимок состояния сервера. Поле version обязательно с первой
-// версии; все количественные значения - целые числа.
+// версии; все количественные значения - целые числа. Номера тика нет:
+// симуляция событийная, планировщик лежит внутри World.
 type Snapshot struct {
 	Version        int           `json:"version"`
-	Tick           int64         `json:"tick"`
 	ServerTimeUnix int64         `json:"serverTimeUnix"`
 	World          *domain.World `json:"world"`
 }
@@ -31,7 +31,6 @@ type Snapshot struct {
 func NewSnapshot(w *domain.World, serverTimeUnix int64) *Snapshot {
 	return &Snapshot{
 		Version:        domain.SnapshotVersion,
-		Tick:           w.Tick,
 		ServerTimeUnix: serverTimeUnix,
 		World:          w,
 	}
@@ -83,9 +82,10 @@ func LoadSnapshot(path string) (*Snapshot, error) {
 	return &s, nil
 }
 
-// BattleEvent - запись о бое в журнале критичных событий.
+// BattleEvent - запись о бое в журнале критичных событий. EventID - id
+// события планировщика о прибытии марша, которое привело к бою.
 type BattleEvent struct {
-	Tick           int64  `json:"tick"`
+	EventID        string `json:"eventId"`
 	TimeUnix       int64  `json:"timeUnix"`
 	Type           string `json:"type"` // всегда "battle"
 	Mode           string `json:"mode"`

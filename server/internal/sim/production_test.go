@@ -24,19 +24,19 @@ func newTestEngine(t *testing.T, now int64) *Engine {
 	return NewEngine(cfg, NewWorld(cfg, now), persistence.NewEventLog(io.Discard))
 }
 
-// newPlayerVillage создаёт игрока с деревней и возвращает её.
-func newPlayerVillage(t *testing.T, e *Engine, playerID string, x, y int, now int64) *domain.Village {
+// newPlayerSettlement создаёт игрока с поселением и возвращает её.
+func newPlayerSettlement(t *testing.T, e *Engine, playerID string, x, y int, now int64) *domain.Settlement {
 	t.Helper()
 	if err := e.CreatePlayer(playerID, "Player "+playerID, x, y, 10, 19, now); err != nil {
 		t.Fatalf("create player: %v", err)
 	}
 	p := e.World.Players[playerID]
-	return e.World.Villages[p.VillageIDs[0]]
+	return e.World.Settlements[p.SettlementIDs[0]]
 }
 
 func TestProductionAccruesByElapsedTime(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	if err := e.StartConstruction("p1", v.ID, "sawmill", testT0); err != nil {
 		t.Fatalf("start construction: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestProductionAccruesByElapsedTime(t *testing.T) {
 
 func TestProductionCappedAtStorage(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	v.Buildings = map[string]int{"main": 1, "farm": 5}
 	// Почти полный продовольственный склад (вместимость 1000 ед.): свободно
 	// ровно 3 единицы.
@@ -71,12 +71,12 @@ func TestProductionCappedAtStorage(t *testing.T) {
 	}
 }
 
-// TestBaseProduction проверяет базовую выработку каждой деревни по конфигу
+// TestBaseProduction проверяет базовую выработку каждой поселения по конфигу
 // мира (baseProductionPerHour на каждый ресурс, без зданий).
 func TestBaseProduction(t *testing.T) {
 	e := newTestEngine(t, testT0)
 	e.Cfg.World.BaseProductionPerHour = 10
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	e.settle(v, testT0+3600)
 	for _, resID := range []string{"wood", "stone", "iron", "food"} {
 		// Старт 500 ед. + 10 ед./час = 510 ед.
@@ -88,7 +88,7 @@ func TestBaseProduction(t *testing.T) {
 
 func TestSettleIdempotent(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	v.Buildings = map[string]int{"main": 1, "sawmill": 2, "farm": 1}
 	e.settle(v, testT0+7200)
 	snapshot := make(map[string]int64, len(v.ResourcesMilli))
@@ -105,7 +105,7 @@ func TestSettleIdempotent(t *testing.T) {
 
 func TestSpendAtomicOnInsufficientFunds(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	v.Buildings = map[string]int{"main": 1, "barracks": 1}
 	// Ровно на одного пехотинца: 100 дерева + 50 железа.
 	v.ResourcesMilli = map[string]int64{"wood": 100_000, "stone": 0, "iron": 50_000, "food": 0}
@@ -135,7 +135,7 @@ func TestSpendAtomicOnInsufficientFunds(t *testing.T) {
 
 func TestConstructionPaysOnlyOnce(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	if err := e.StartConstruction("p1", v.ID, "sawmill", testT0); err != nil {
 		t.Fatalf("start construction: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestConstructionPaysOnlyOnce(t *testing.T) {
 	if v.ResourcesMilli["wood"] != woodAfterPay {
 		t.Fatalf("rejected construction charged resources")
 	}
-	e.Tick(v.BuildJob.FinishUnix)
+	e.Advance(v.BuildJob.FinishUnix)
 	if v.Buildings["sawmill"] != 1 || v.BuildJob != nil {
 		t.Fatalf("construction did not finish: %+v", v.BuildJob)
 	}
@@ -154,7 +154,7 @@ func TestConstructionPaysOnlyOnce(t *testing.T) {
 
 func TestInstantCompleteRequiresDebugMode(t *testing.T) {
 	e := newTestEngine(t, testT0)
-	v := newPlayerVillage(t, e, "p1", 10, 10, testT0)
+	v := newPlayerSettlement(t, e, "p1", 10, 10, testT0)
 	e.Cfg.World.DebugMode = false
 	if err := e.InstantComplete("p1", v.ID, testT0); err == nil {
 		t.Fatalf("instant complete must be rejected without debugMode")

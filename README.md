@@ -5,20 +5,20 @@
 ## Основные возможности
 
 - **Ленивые вычисления ресурсов** (Compute on Read): ресурсы вычисляются по формуле `rate * (now - last_update_at)` в момент чтения, а не тикают. «Жёсткие» события (стройка, марши, найм) обрабатываются планировщиком по серверному времени
-- Генерация мира: квадратная карта с месторождениями ресурсов и варварскими лагерями (NPC-угроза, PvPvE)
+- Генерация мира: квадратная карта с месторождениями ресурсов и лагерей мародёров (NPC-угроза, PvPvE)
 - Экономика: производство ресурсов по прошедшему времени, строительство зданий с очередями, два вида складов (food / nonfood)
 - Боевая система: марши армий, разрешение боёв, награды за лагеря
-- Атаки варваров по расписанию (интервал в часах, из конфига)
+- Атаки мародёров по расписанию (интервал в часах, из конфига)
 - Персистентность: периодические снапшоты состояния + append-only журнал событий (JSONL) с `last_event_id` для восстановления
 - Весь контент (ресурсы, здания, юниты, бой, мир) - в валидируемых JSON-конфигах, без хардкода в коде
-- Actor-модель состояния: одна сущность — одна горутина с почтовым ящиком, без глобальных мьютексов
+- Actor-модель состояния: одна горутина-владелец мира с очередью команд и планировщиком событий, без глобальных мьютексов
 
 ## Технологический стек
 
 - **Go 1.26** - бэкенд и симуляция
 - **Архитектура**: сервер-авторитетная, слоистая (Data / Game Logic / Transport / Storage), 
   событийно-ориентированная (без тика: планировщик событий min-heap по `fire_at` + 
-  ленивые вычисления ресурсов Compute on Read), Actor-модель (одна горутина на сущность), 
+  ленивые вычисления ресурсов Compute on Read), Actor-модель (один актор симуляции владеет состоянием), 
   без глобальных мьютексов
 - **Конфиги**: JSON-файлы, версионируемые и валидируемые при старте
 - **Хранение**: файловые снапшоты (JSON, с `version`, `snapshot_at`, `last_event_id`) + append-only журнал      событий (JSONL, с `event_id` и `idempotency_key`); целевое решение - PostgreSQL (pgx/sqlc)
@@ -69,26 +69,41 @@ events, _ := persistence.OpenEventLog(cfg.World.EventLogPath)
 world := sim.NewWorld(cfg, time.Now().Unix()) // или persistence.LoadSnapshot(...)
 engine := sim.NewEngine(cfg, world, events)
 
-// Ленивый пересчёт ресурсов — при чтении состояния сущности:
-v := world.Village(id)
-v.RefreshResources(time.Now().Unix()) // rate * (now - v.LastUpdateAt)
+// Ленивый пересчёт ресурсов - при чтении состояния поселения:
+state, err := engine.GetSettlementState(settlementID, time.Now().Unix())
 
-// «Жёсткие» события — через планировщик:
-engine.Scheduler.FireDue(time.Now().Unix()) // обработать все события с fire_at <= now
+// «Жёсткие» события (стройка, прибытие марша, действия лагеря) - через планировщик:
+engine.Advance(time.Now().Unix()) // применить все события с fire_at <= now по порядку (fire_at, seq)
 ```
 
 Цикл в `server/cmd/server/main.go`:
 
 ```go
+// Таймер взводится на ближайшее событие кучи; тикера симуляции нет.
+wake := time.NewTimer(time.Hour)
+var wakeC <-chan time.Time
+rearm := func() {
+    wake.Stop()
+    wakeC = nil
+    if next, ok := engine.NextEventUnix(); ok {
+        wake.Reset(max(time.Until(time.Unix(next, 0)), 0))
+        wakeC = wake.C
+    }
+}
+rearm()
 snapTick := time.NewTicker(time.Duration(cfg.World.SnapshotIntervalSeconds) * time.Second)
-schedulerTick := time.NewTicker(500 * time.Millisecond) // проверка просроченных событий
 for {
     select {
-    case <-schedulerTick.C:
-        engine.Scheduler.FireDue(time.Now().Unix()) // пакетно: все события с fire_at <= now
+    case <-wakeC:
+        engine.Advance(time.Now().Unix())
+        rearm()
+    case cmd := <-wsServer.CommandChan():
+        engine.Advance(time.Now().Unix()) // перед командой применены все события с fire_at <= now
+        executeCommand(engine, wsServer, cmd)
+        rearm()
     case <-snapTick.C:
         persistence.SaveSnapshot(cfg.World.SnapshotPath,
-            persistence.NewSnapshot(engine.World, time.Now().Unix())) // пишет last_event_id
+            persistence.NewSnapshot(engine.World, time.Now().Unix())) // куча событий лежит внутри World
     }
 }
 ```

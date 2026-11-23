@@ -3,7 +3,6 @@ package sim
 import (
 	"errors"
 	"fmt"
-	"sort"
 
 	"inspiredtk/server/internal/domain"
 	"inspiredtk/server/internal/util"
@@ -19,40 +18,40 @@ func (e *Engine) provisionPerUnit(distMilli int64) int64 {
 	return 0
 }
 
-// SendMarch отправляет марш (атаку или набег) из деревни на клетку с лагерем
-// варваров или чужой деревней. Провиант списывается при отправке
+// SendMarch отправляет марш (атаку или набег) из поселения на клетку с лагерем
+// варваров или чужой поселением. Провиант списывается при отправке
 // (GAME/game-design.md, «Марши и провиант»).
 //
 // Returns: id созданного марша.
-func (e *Engine) SendMarch(playerID, villageID string, marchType domain.MarchType, toX, toY, units int, now int64) (string, error) {
+func (e *Engine) SendMarch(playerID, settlementID string, marchType domain.MarchType, toX, toY, units int, now int64) (string, error) {
 	if marchType != domain.MarchAttack && marchType != domain.MarchRaid {
 		return "", fmt.Errorf("march type must be %q or %q", domain.MarchAttack, domain.MarchRaid)
 	}
 	if units <= 0 {
 		return "", errors.New("march units must be positive")
 	}
-	v, err := e.ownedVillage(playerID, villageID)
+	v, err := e.ownedSettlement(playerID, settlementID)
 	if err != nil {
 		return "", err
 	}
 	e.applyConstruction(v, now)
 	e.applyTraining(v, now)
 	if v.StationedInfantry < units {
-		return "", fmt.Errorf("village %s: not enough infantry: need %d, have %d", villageID, units, v.StationedInfantry)
+		return "", fmt.Errorf("settlement %s: not enough infantry: need %d, have %d", settlementID, units, v.StationedInfantry)
 	}
 	cell := e.World.CellAt(toX, toY)
 	if cell == nil {
 		return "", fmt.Errorf("target cell (%d,%d) is outside the map", toX, toY)
 	}
-	var targetVillageID, targetCampID string
+	var targetSettlementID, targetCampID string
 	switch {
 	case cell.CampID != "":
 		targetCampID = cell.CampID
-	case cell.VillageID != "":
-		if cell.VillageID == villageID {
-			return "", errors.New("cannot march on own village")
+	case cell.SettlementID != "":
+		if cell.SettlementID == settlementID {
+			return "", errors.New("cannot march on own settlement")
 		}
-		targetVillageID = cell.VillageID
+		targetSettlementID = cell.SettlementID
 	default:
 		return "", fmt.Errorf("no target at cell (%d,%d)", toX, toY)
 	}
@@ -60,14 +59,14 @@ func (e *Engine) SendMarch(playerID, villageID string, marchType domain.MarchTyp
 	provision := e.provisionPerUnit(distMilli) * int64(units) * util.MilliPerUnit
 	e.settle(v, now)
 	if v.ResourcesMilli["food"] < provision {
-		return "", fmt.Errorf("village %s: not enough food for provisions: need %d milli, have %d milli",
-			villageID, provision, v.ResourcesMilli["food"])
+		return "", fmt.Errorf("settlement %s: not enough food for provisions: need %d milli, have %d milli",
+			settlementID, provision, v.ResourcesMilli["food"])
 	}
 	v.ResourcesMilli["food"] -= provision
 	v.StationedInfantry -= units
 
 	id := e.newID("m")
-	e.World.Marches[id] = &domain.March{
+	e.addMarch(&domain.March{
 		ID:              id,
 		PlayerID:        playerID,
 		Type:            marchType,
@@ -76,17 +75,23 @@ func (e *Engine) SendMarch(playerID, villageID string, marchType domain.MarchTyp
 		FromY:           v.Y,
 		ToX:             toX,
 		ToY:             toY,
-		OriginVillageID: villageID,
-		TargetVillageID: targetVillageID,
+		OriginSettlementID: settlementID,
+		TargetSettlementID: targetSettlementID,
 		TargetCampID:    targetCampID,
 		DepartUnix:      now,
 		ArriveUnix:      now + util.TravelSeconds(distMilli, e.Cfg.UnitByID["infantry"].SpeedCellsPerHour),
 		ProvisionMilli:  provision,
-	}
+	})
 	return id, nil
 }
 
-// CancelMarch отменяет марш до прибытия: провиант возвращается в деревню,
+// addMarch регистрирует марш в мире и ставит событие его прибытия.
+func (e *Engine) addMarch(m *domain.March) {
+	m.EventID = e.schedule(domain.EventMarchArrive, m.ID, m.ArriveUnix)
+	e.World.Marches[m.ID] = m
+}
+
+// CancelMarch отменяет марш до прибытия: провиант возвращается в поселение,
 // отряд разворачивается и идёт домой (GAME/game-design.md, «Марши и провиант»).
 func (e *Engine) CancelMarch(playerID, marchID string, now int64) error {
 	m, ok := e.World.Marches[marchID]
@@ -102,9 +107,9 @@ func (e *Engine) CancelMarch(playerID, marchID string, now int64) error {
 	if now >= m.ArriveUnix {
 		return fmt.Errorf("march %q has already arrived", marchID)
 	}
-	origin := e.World.Villages[m.OriginVillageID]
+	origin := e.World.Settlements[m.OriginSettlementID]
 	if origin == nil {
-		return fmt.Errorf("march %q: origin village %q is gone", marchID, m.OriginVillageID)
+		return fmt.Errorf("march %q: origin settlement %q is gone", marchID, m.OriginSettlementID)
 	}
 	e.settle(origin, now)
 	e.addCapped(origin, "food", m.ProvisionMilli)
@@ -112,7 +117,7 @@ func (e *Engine) CancelMarch(playerID, marchID string, now int64) error {
 
 	elapsed := now - m.DepartUnix
 	returnID := e.newID("m")
-	e.World.Marches[returnID] = &domain.March{
+	e.addMarch(&domain.March{
 		ID:              returnID,
 		PlayerID:        playerID,
 		Type:            domain.MarchReturn,
@@ -121,37 +126,15 @@ func (e *Engine) CancelMarch(playerID, marchID string, now int64) error {
 		FromY:           m.ToY,
 		ToX:             origin.X,
 		ToY:             origin.Y,
-		OriginVillageID: origin.ID,
+		OriginSettlementID: origin.ID,
 		DepartUnix:      now,
 		ArriveUnix:      now + elapsed,
-	}
+	})
 	return nil
 }
 
-// resolveDueMarches обрабатывает прибытия маршей по порядку
-// (время прибытия, id) - детерминированно.
-func (e *Engine) resolveDueMarches(now int64) {
-	due := make([]*domain.March, 0)
-	for _, m := range e.World.Marches {
-		if now >= m.ArriveUnix {
-			due = append(due, m)
-		}
-	}
-	sort.Slice(due, func(i, j int) bool {
-		if due[i].ArriveUnix != due[j].ArriveUnix {
-			return due[i].ArriveUnix < due[j].ArriveUnix
-		}
-		return due[i].ID < due[j].ID
-	})
-	for _, m := range due {
-		if _, stillThere := e.World.Marches[m.ID]; !stillThere {
-			continue
-		}
-		e.resolveMarch(m, now)
-		delete(e.World.Marches, m.ID)
-	}
-}
-
+// resolveMarch обрабатывает прибытие марша. Вызывается планировщиком по
+// событию march_arrive; now - время прибытия (FireUnix события).
 func (e *Engine) resolveMarch(m *domain.March, now int64) {
 	if m.Type == domain.MarchReturn {
 		e.resolveReturn(m, now)
@@ -161,12 +144,12 @@ func (e *Engine) resolveMarch(m *domain.March, now int64) {
 		e.resolveCampBattle(m, now)
 		return
 	}
-	e.resolveVillageBattle(m, now)
+	e.resolveSettlementBattle(m, now)
 }
 
 // resolveReturn возвращает отряд домой: юниты в гарнизон, добыча на склад.
 func (e *Engine) resolveReturn(m *domain.March, now int64) {
-	v := e.World.Villages[m.OriginVillageID]
+	v := e.World.Settlements[m.OriginSettlementID]
 	if v == nil {
 		return
 	}
@@ -197,10 +180,10 @@ func (e *Engine) resolveCampBattle(m *domain.March, now int64) {
 	e.sendSurvivorsHome(m, survivors, loot, now)
 }
 
-// resolveVillageBattle - прибытие марша к деревне (варварская атака или PvP).
+// resolveSettlementBattle - прибытие марша к поселению (варварская атака или PvP).
 // Выжившие варвары возвращаются в лагерь, выжившие игроки - домой.
-func (e *Engine) resolveVillageBattle(m *domain.March, now int64) {
-	v := e.World.Villages[m.TargetVillageID]
+func (e *Engine) resolveSettlementBattle(m *domain.March, now int64) {
+	v := e.World.Settlements[m.TargetSettlementID]
 	if v == nil {
 		e.sendSurvivorsHome(m, m.Infantry, nil, now)
 		return
@@ -213,6 +196,11 @@ func (e *Engine) resolveVillageBattle(m *domain.March, now int64) {
 	if m.OriginCampID != "" {
 		if camp := e.World.Camps[m.OriginCampID]; camp != nil {
 			camp.Infantry += survivors
+			// Лагерь без войск простаивает без события: вернувшиеся
+			// выжившие снова ставят его в планировщик.
+			if camp.EventID == "" {
+				e.armCamp(camp, now)
+			}
 		}
 		return
 	}
@@ -224,13 +212,13 @@ func (e *Engine) sendSurvivorsHome(m *domain.March, survivors int, loot map[stri
 	if survivors <= 0 {
 		return
 	}
-	origin := e.World.Villages[m.OriginVillageID]
+	origin := e.World.Settlements[m.OriginSettlementID]
 	if origin == nil {
 		return
 	}
 	travel := m.ArriveUnix - m.DepartUnix
 	returnID := e.newID("m")
-	e.World.Marches[returnID] = &domain.March{
+	e.addMarch(&domain.March{
 		ID:              returnID,
 		PlayerID:        m.PlayerID,
 		Type:            domain.MarchReturn,
@@ -239,9 +227,9 @@ func (e *Engine) sendSurvivorsHome(m *domain.March, survivors int, loot map[stri
 		FromY:           m.ToY,
 		ToX:             origin.X,
 		ToY:             origin.Y,
-		OriginVillageID: origin.ID,
+		OriginSettlementID: origin.ID,
 		DepartUnix:      now,
 		ArriveUnix:      now + travel,
 		LootMilli:       loot,
-	}
+	})
 }

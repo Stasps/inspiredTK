@@ -85,7 +85,7 @@ func TestBattleNoDefenders(t *testing.T) {
 func TestBarbarianAttacksOnlyInsidePlayerWindows(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 	e := newTestEngine(t, base)
-	v := newPlayerVillage(t, e, "p1", 50, 50, base)
+	v := newPlayerSettlement(t, e, "p1", 50, 50, base)
 	if err := e.SetWindows("p1", 10, 14); err != nil {
 		t.Fatalf("set windows: %v", err)
 	}
@@ -100,10 +100,12 @@ func TestBarbarianAttacksOnlyInsidePlayerWindows(t *testing.T) {
 	}
 	army := camp.Infantry
 	camp.NextAttackUnix = base
+	// Дедлайн лагеря изменён в обход команд: переставляем его событие.
+	e.armCamp(camp, base)
 
-	e.Tick(base)
-	if camp.TargetVillageID != v.ID {
-		t.Fatalf("camp must target the only village: %q", camp.TargetVillageID)
+	e.Advance(base)
+	if camp.TargetSettlementID != v.ID {
+		t.Fatalf("camp must target the only settlement: %q", camp.TargetSettlementID)
 	}
 	wantDepart := base + 10*3600
 	if camp.ScheduledDepartUnix != wantDepart {
@@ -114,7 +116,7 @@ func TestBarbarianAttacksOnlyInsidePlayerWindows(t *testing.T) {
 		t.Fatalf("depart hour %d outside window [10,13)", departHour)
 	}
 
-	e.Tick(camp.ScheduledDepartUnix)
+	e.Advance(camp.ScheduledDepartUnix)
 	if camp.Infantry != 0 {
 		t.Fatalf("camp army must depart: %d", camp.Infantry)
 	}
@@ -124,7 +126,7 @@ func TestBarbarianAttacksOnlyInsidePlayerWindows(t *testing.T) {
 			march = m
 		}
 	}
-	if march == nil || march.Infantry != army || march.TargetVillageID != v.ID {
+	if march == nil || march.Infantry != army || march.TargetSettlementID != v.ID {
 		t.Fatalf("barbarian march: %+v", march)
 	}
 	if camp.NextAttackUnix-camp.ScheduledDepartUnix != 24*3600 {
