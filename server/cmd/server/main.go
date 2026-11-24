@@ -126,7 +126,7 @@ func main() {
 				info, err := engine.JoinPlayer(ev.Session.PlayerID, now)
 				if err != nil {
 					logger.Printf("session %d: join player %q: %v", ev.Session.ID, ev.Session.PlayerID, err)
-					ev.Session.SendAndClose(transport.EncodeError(fmt.Sprintf("join: %v", err)))
+					ev.Session.SendAndClose(transport.EncodeError(transport.CodeJoinFailed, fmt.Sprintf("join: %v", err)))
 					break
 				}
 				hub.Add(ev.Session)
@@ -136,14 +136,20 @@ func main() {
 			case transport.EventLeave:
 				hub.Remove(ev.Session)
 			case transport.EventCommand:
+				// Команда вынута из очереди: место игрока в лимите очереди свободно.
+				ev.Taken()
 				cmd := ev.Command
 				// Инвариант: перед командой применены все события с fire_at <= now.
 				engine.Advance(time.Now().Unix())
-				if err := executeCommand(engine, hub, ev.Session.PlayerID, cmd); err != nil {
-					logger.Printf("command %s failed: %v", cmd.Name, err)
-					hub.Broadcast(transport.MessageTypeError, map[string]string{
-						"error": fmt.Sprintf("command %s: %v", cmd.Name, err),
-					})
+				// Ответ (ack, ошибка или данные) с cmd_id - только отправителю;
+				// ответ меняющей мир команды запоминается для повторов cmd_id.
+				replyType, reply, err := executeCommand(engine, ev.Session.PlayerID, cmd)
+				if err != nil {
+					logger.Printf("session %d: command %s failed: %v", ev.Session.ID, cmd.Name, err)
+					ev.Reply(transport.EncodeCommandError(cmd.ID, transport.CodeCommandFailed,
+						fmt.Sprintf("command %s: %v", cmd.Name, err)), !readOnlyCommands[cmd.Name])
+				} else {
+					ev.Reply(transport.EncodeReply(replyType, cmd.ID, reply), !readOnlyCommands[cmd.Name])
 				}
 				// Команда могла поставить событие раньше прежнего ближайшего
 				// (или сдвинуть время в debug-режиме).
@@ -164,11 +170,26 @@ func main() {
 	}
 }
 
+// readOnlyCommands - команды, которые только читают мир: их ответ не
+// запоминается (он большой), повтор cmd_id выполняет их заново.
+var readOnlyCommands = map[string]bool{"get_map": true}
+
 // executeCommand routes a queued client command to the engine on behalf of
-// the session's player. Commands on a settlement carry data.settlementId;
-// ownership is checked by the engine.
-// Engine is not thread-safe, so this is called only from the main loop.
-func executeCommand(e *sim.Engine, hub *transport.Hub, playerID string, cmd transport.Command) error {
+// the session's player. Engine is not thread-safe, so this is called only
+// from the main loop.
+//
+// Returns: тип и данные ответа отправителю (ack без данных, если команде
+// нечего вернуть) или ошибку команды.
+func executeCommand(e *sim.Engine, playerID string, cmd transport.Command) (transport.MessageType, interface{}, error) {
+	if cmd.Name == "get_map" {
+		return transport.MessageTypeMap, e.GetMap(), nil
+	}
+	return transport.MessageTypeAck, nil, mutateCommand(e, playerID, cmd)
+}
+
+// mutateCommand выполняет команду, меняющую мир. Commands on a settlement
+// carry data.settlementId; ownership is checked by the engine.
+func mutateCommand(e *sim.Engine, playerID string, cmd transport.Command) error {
 	settlementID := func() (string, error) {
 		id, ok := cmd.Data["settlementId"].(string)
 		if !ok || id == "" {
@@ -224,9 +245,6 @@ func executeCommand(e *sim.Engine, hub *transport.Hub, playerID string, cmd tran
 			return err
 		}
 		return e.InstantComplete(playerID, sid, time.Now().Unix())
-	case "get_map":
-		hub.Broadcast(transport.MessageTypeMap, e.GetMap())
-		return nil
 	case "skip_time":
 		seconds, ok := toInt64(cmd.Data["seconds"])
 		if !ok || seconds <= 0 {

@@ -599,11 +599,19 @@
                 }
             } else if (msg.type === 'error') {
                 const err = msg.data ? (msg.data.error || msg.data) : null;
-                log('Ошибка: ' + (err || 'Unknown error'), 'error');
-            } else if (msg.type === 'success') {
-                log('Успешно', 'success');
+                const code = msg.data && msg.data.code ? `[${msg.data.code}] ` : '';
+                log('Ошибка: ' + code + (err || 'Unknown error'), 'error');
             }
+            // ack (успешная команда) в лог не пишется.
         }
+
+        // cmd_id команды: ответ сервера (ack, error, map) приходит с ним же.
+        // Сервер помнит последние cmd_id игрока и на повтор шлёт прежний ответ,
+        // не выполняя команду, поэтому id уникален и после перезагрузки страницы:
+        // случайная приставка на загрузку плюс счётчик.
+        const cmdPrefix = Date.now().toString(36) + '-' +
+            Array.from(crypto.getRandomValues(new Uint8Array(4)), b => b.toString(16).padStart(2, '0')).join('') + '-';
+        let cmdSeq = 0;
 
         function sendCommand(cmd, data) {
             if (!connected || !ws) {
@@ -622,6 +630,7 @@
             const msg = {
                 type: 'command',
                 cmd: cmd,
+                cmd_id: cmdPrefix + (++cmdSeq),
                 data: data
             };
 

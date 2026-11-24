@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,23 @@ type fakeConn struct {
 
 	writers    atomic.Int32
 	maxWriters atomic.Int32
+	deadline   atomic.Int64 // UnixNano, 0 - без таймаута
+	readDL     atomic.Int64 // UnixNano последнего SetReadDeadline
+	pong       atomic.Pointer[func(string) error]
+}
+
+func (c *fakeConn) SetWriteDeadline(t time.Time) error {
+	c.deadline.Store(t.UnixNano())
+	return nil
+}
+
+func (c *fakeConn) SetReadDeadline(t time.Time) error {
+	c.readDL.Store(t.UnixNano())
+	return nil
+}
+
+func (c *fakeConn) SetPongHandler(h func(string) error) {
+	c.pong.Store(&h)
 }
 
 func newFakeConn(blocking bool) *fakeConn {
@@ -54,10 +72,16 @@ func (c *fakeConn) WriteMessage(messageType int, data []byte) error {
 		}
 	}
 	if c.gate != nil {
+		var timeout <-chan time.Time
+		if d := c.deadline.Load(); d != 0 {
+			timeout = time.After(time.Until(time.Unix(0, d)))
+		}
 		select {
 		case <-c.gate:
 		case <-c.closed:
 			return errors.New("closed")
+		case <-timeout:
+			return errors.New("write timeout")
 		}
 	}
 	select {
@@ -180,6 +204,158 @@ func TestSendAndClose(t *testing.T) {
 	}
 }
 
+// Слот состояния: новое состояние затирает неотправленное, переполнения и
+// разрыва нет; клиент получает последнее.
+func TestStateSlotOverwrites(t *testing.T) {
+	conn := newFakeConn(true)
+	s := newSession(1, "p1", conn, 4)
+	defer s.Close()
+	for i := range 100 {
+		if !s.SendState([]byte{byte(i)}) {
+			t.Fatalf("SendState %d returned false", i)
+		}
+	}
+	close(conn.gate)
+	time.Sleep(50 * time.Millisecond)
+	written, _ := conn.snapshot()
+	// Первое состояние писатель мог забрать до затирания; дальше - только последнее.
+	if len(written) == 0 || len(written) > 2 || written[len(written)-1][0] != 99 {
+		t.Fatalf("written %v, want at most 2 states ending with 99", written)
+	}
+	if s.isClosed() {
+		t.Fatal("state overflow closed the session")
+	}
+}
+
+// Уведомления пишутся раньше ожидающего состояния.
+func TestNotificationsBeforeState(t *testing.T) {
+	conn := newFakeConn(true)
+	s := newSession(1, "p1", conn, 4)
+	defer s.Close()
+	s.Send([]byte("n0"))
+	waitWriters(t, conn) // писатель держит n0 в WriteMessage
+	s.SendState([]byte("s"))
+	s.Send([]byte("n1"))
+	s.Send([]byte("n2"))
+	close(conn.gate)
+	written := waitWritten(t, conn, 4)
+	if got := string(bytesJoin(written)); got != "n0n1n2s" {
+		t.Fatalf("order %q, want n0n1n2s", got)
+	}
+}
+
+// Клиент, который не читает дольше таймаута записи, отключается.
+func TestWriteTimeoutCloses(t *testing.T) {
+	conn := newFakeConn(true)
+	s := newSessionTimeout(1, "p1", conn, 4, 50*time.Millisecond)
+	start := time.Now()
+	s.SendState([]byte("state"))
+	waitClosed(t, s)
+	if d := time.Since(start); d < 40*time.Millisecond {
+		t.Fatalf("closed after %v, before the write timeout", d)
+	}
+}
+
+// Сервер шлёт ping через писателя сессии с заданным интервалом, не
+// нарушая правило одного писателя.
+func TestPingSentPeriodically(t *testing.T) {
+	conn := newFakeConn(false)
+	s := newSessionKeepalive(1, "p1", conn, 4, WriteTimeout, 10*time.Millisecond, 0)
+	defer s.Close()
+	s.Send([]byte("n"))
+	deadline := time.Now().Add(testWait)
+	for {
+		_, types := conn.snapshot()
+		pings := 0
+		for _, ty := range types {
+			if ty == websocket.PingMessage {
+				pings++
+			}
+		}
+		if pings >= 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("got %d pings, want at least 3", pings)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if m := conn.maxWriters.Load(); m != 1 {
+		t.Fatalf("max concurrent writers %d, want 1", m)
+	}
+}
+
+// Без ping (интервал 0) ничего лишнего в сокет не пишется.
+func TestNoPingWhenDisabled(t *testing.T) {
+	conn := newFakeConn(false)
+	s := newSessionTimeout(1, "p1", conn, 4, WriteTimeout)
+	defer s.Close()
+	time.Sleep(30 * time.Millisecond)
+	if w, _ := conn.snapshot(); len(w) != 0 {
+		t.Fatalf("wrote %d messages, want none", len(w))
+	}
+}
+
+// Read deadline ставится при создании сессии, pong и принятое сообщение
+// отодвигают его на ReadTimeout.
+func TestReadDeadlineArmedAndExtended(t *testing.T) {
+	conn := newFakeConn(false)
+	const timeout = time.Minute
+	before := time.Now()
+	s := newSessionKeepalive(1, "p1", conn, 4, WriteTimeout, 0, timeout)
+	defer s.Close()
+	first := time.Unix(0, conn.readDL.Load())
+	if first.Before(before.Add(timeout)) || first.After(time.Now().Add(timeout)) {
+		t.Fatalf("initial read deadline %v, want about now+%v", first, timeout)
+	}
+	h := conn.pong.Load()
+	if h == nil {
+		t.Fatal("pong handler is not set")
+	}
+	time.Sleep(5 * time.Millisecond)
+	if err := (*h)(""); err != nil {
+		t.Fatalf("pong handler: %v", err)
+	}
+	afterPong := time.Unix(0, conn.readDL.Load())
+	if !afterPong.After(first) {
+		t.Fatalf("pong did not extend the read deadline: %v -> %v", first, afterPong)
+	}
+	time.Sleep(5 * time.Millisecond)
+	s.extendRead()
+	if !time.Unix(0, conn.readDL.Load()).After(afterPong) {
+		t.Fatal("received message did not extend the read deadline")
+	}
+}
+
+// Без таймаута чтения (ReadTimeout 0) deadline и обработчик pong не ставятся.
+func TestNoReadDeadlineWhenDisabled(t *testing.T) {
+	conn := newFakeConn(false)
+	s := newSessionTimeout(1, "p1", conn, 4, WriteTimeout)
+	defer s.Close()
+	if conn.readDL.Load() != 0 || conn.pong.Load() != nil {
+		t.Fatal("read deadline or pong handler set with the timeout disabled")
+	}
+}
+
+func waitWriters(t *testing.T, c *fakeConn) {
+	t.Helper()
+	deadline := time.Now().Add(testWait)
+	for c.writers.Load() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("writer did not start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func bytesJoin(parts [][]byte) []byte {
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
+}
+
 // Close идемпотентен и безопасен одновременно с Send.
 func TestCloseConcurrentWithSend(t *testing.T) {
 	conn := newFakeConn(false)
@@ -199,8 +375,8 @@ func TestCloseConcurrentWithSend(t *testing.T) {
 	waitClosed(t, s)
 }
 
-// Hub рассылает всем сессиям, снятая сессия больше ничего не получает.
-func TestHubBroadcastAndRemove(t *testing.T) {
+// Hub держит сессии по возрастанию ID, снятая сессия больше ничего не получает.
+func TestHubSessionsAndRemove(t *testing.T) {
 	h := NewHub()
 	c1, c2 := newFakeConn(false), newFakeConn(false)
 	s1, s2 := newSession(1, "p1", c1, 8), newSession(2, "p2", c2, 8)
@@ -211,17 +387,34 @@ func TestHubBroadcastAndRemove(t *testing.T) {
 	if got := h.Sessions(); len(got) != 2 || got[0] != s1 || got[1] != s2 {
 		t.Fatalf("Sessions not ordered by ID")
 	}
-	h.Broadcast(MessageTypeState, map[string]int{"n": 1})
-	waitWritten(t, c1, 1)
-	waitWritten(t, c2, 1)
-
 	h.Remove(s2)
-	h.Broadcast(MessageTypeState, map[string]int{"n": 2})
-	h.Send(s1, MessageTypeError, "only s1")
-	waitWritten(t, c1, 3)
+	h.BroadcastPerPlayer(MessageTypeState, func(string) interface{} { return 1 })
+	waitWritten(t, c1, 1)
 	time.Sleep(20 * time.Millisecond)
-	if w, _ := c2.snapshot(); len(w) != 1 {
-		t.Fatalf("removed session got %d messages, want 1", len(w))
+	if w, _ := c2.snapshot(); len(w) != 0 {
+		t.Fatalf("removed session got %d messages, want 0", len(w))
+	}
+}
+
+// Ответ на команду кодируется с её cmd_id, ошибка - с кодом.
+func TestEncodeReplyCarriesCmdID(t *testing.T) {
+	var ack Message
+	if err := json.Unmarshal(EncodeReply(MessageTypeAck, "c1", nil), &ack); err != nil {
+		t.Fatal(err)
+	}
+	if ack.Type != MessageTypeAck || ack.CmdID != "c1" || ack.Data != nil {
+		t.Fatalf("ack %+v", ack)
+	}
+	var msg Message
+	if err := json.Unmarshal(EncodeCommandError("c2", CodeCommandFailed, "boom"), &msg); err != nil {
+		t.Fatal(err)
+	}
+	var data ErrorData
+	if err := json.Unmarshal(msg.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	if msg.Type != MessageTypeError || msg.CmdID != "c2" || data.Code != CodeCommandFailed || data.Error != "boom" {
+		t.Fatalf("error %+v %+v", msg, data)
 	}
 }
 
@@ -229,7 +422,21 @@ func TestHubBroadcastAndRemove(t *testing.T) {
 
 func startServer(t *testing.T, queueSize int) (*Server, string) {
 	t.Helper()
-	srv := newServer(queueSize, 8)
+	l := DefaultLimits()
+	l.QueueSize, l.OutboxSize = queueSize, 8
+	srv := newServer(l)
+	ts := httptest.NewServer(http.HandlerFunc(srv.HandleWebSocket))
+	t.Cleanup(ts.Close)
+	return srv, "ws" + strings.TrimPrefix(ts.URL, "http")
+}
+
+// startKeepaliveServer - сервер с короткими ping и таймаутом чтения.
+func startKeepaliveServer(t *testing.T, ping, readTimeout time.Duration) (*Server, string) {
+	t.Helper()
+	l := DefaultLimits()
+	l.QueueSize, l.OutboxSize = 16, 8
+	l.PingInterval, l.ReadTimeout = ping, readTimeout
+	srv := newServer(l)
 	ts := httptest.NewServer(http.HandlerFunc(srv.HandleWebSocket))
 	t.Cleanup(ts.Close)
 	return srv, "ws" + strings.TrimPrefix(ts.URL, "http")
@@ -256,11 +463,31 @@ func nextEvent(t *testing.T, srv *Server) Event {
 	}
 }
 
-func sendCommand(t *testing.T, c *websocket.Conn, name string, data any) {
+var testCmdSeq atomic.Int64
+
+// sendCommand отправляет команду с новым cmd_id и возвращает этот id.
+func sendCommand(t *testing.T, c *websocket.Conn, name string, data any) string {
 	t.Helper()
-	raw, _ := json.Marshal(data)
-	if err := c.WriteJSON(Message{Type: MessageTypeCommand, Cmd: name, Data: raw}); err != nil {
+	id := "c" + strconv.FormatInt(testCmdSeq.Add(1), 10)
+	sendRaw(t, c, Message{Type: MessageTypeCommand, Cmd: name, CmdID: id, Data: mustMarshal(data)})
+	return id
+}
+
+func sendRaw(t *testing.T, c *websocket.Conn, msg Message) {
+	t.Helper()
+	if err := c.WriteJSON(msg); err != nil {
 		t.Fatalf("write: %v", err)
+	}
+}
+
+// readError читает сообщение и проверяет, что это ошибка с кодом code и cmd_id.
+func readError(t *testing.T, c *websocket.Conn, code, cmdID string) {
+	t.Helper()
+	msg := readMessage(t, c)
+	var data ErrorData
+	_ = json.Unmarshal(msg.Data, &data)
+	if msg.Type != MessageTypeError || data.Code != code || msg.CmdID != cmdID {
+		t.Fatalf("got %s cmd_id %q %s, want error %s for %q", msg.Type, msg.CmdID, msg.Data, code, cmdID)
 	}
 }
 
@@ -283,9 +510,9 @@ func TestServerSessionLifecycle(t *testing.T) {
 	if join.Kind != EventJoin || join.Session == nil || join.Session.PlayerID != "alice" {
 		t.Fatalf("first event %+v, want join", join)
 	}
-	sendCommand(t, c, "upgrade_building", map[string]string{"building": "main"})
+	id := sendCommand(t, c, "upgrade_building", map[string]string{"building": "main"})
 	cmd := nextEvent(t, srv)
-	if cmd.Kind != EventCommand || cmd.Session != join.Session || cmd.Command.Name != "upgrade_building" || cmd.Command.Data["building"] != "main" {
+	if cmd.Kind != EventCommand || cmd.Session != join.Session || cmd.Command.ID != id || cmd.Command.Name != "upgrade_building" || cmd.Command.Data["building"] != "main" {
 		t.Fatalf("command event %+v", cmd)
 	}
 
@@ -307,12 +534,29 @@ func TestServerQueueFullRejectsToSender(t *testing.T) {
 	srv, url := startServer(t, 2)
 	c := dial(t, url+"?player=p1")
 	nextEvent(t, srv) // join разобран, в очереди 2 места
+	var last string
 	for range 3 {
-		sendCommand(t, c, "noop", nil)
+		last = sendCommand(t, c, "noop", nil)
 	}
-	msg := readMessage(t, c)
-	if msg.Type != MessageTypeError || !strings.Contains(string(msg.Data), "command queue full") {
-		t.Fatalf("got %s %s, want queue full error", msg.Type, msg.Data)
+	readError(t, c, CodeServerBusy, last)
+}
+
+// Команда без cmd_id или с неразборными data отклоняется bad_request и в
+// очередь не попадает.
+func TestServerRejectsBadCommand(t *testing.T) {
+	srv, url := startServer(t, 16)
+	c := dial(t, url+"?player=p1")
+	nextEvent(t, srv)
+	sendRaw(t, c, Message{Type: MessageTypeCommand, Cmd: "noop"})
+	readError(t, c, CodeBadRequest, "")
+	sendRaw(t, c, Message{Type: MessageTypeCommand, Cmd: "noop", CmdID: strings.Repeat("x", MaxCmdIDLen+1)})
+	readError(t, c, CodeBadRequest, "")
+	sendRaw(t, c, Message{Type: MessageTypeCommand, Cmd: "noop", CmdID: "c-bad", Data: json.RawMessage(`[1]`)})
+	readError(t, c, CodeBadRequest, "c-bad")
+	select {
+	case ev := <-srv.Events():
+		t.Fatalf("rejected command reached the queue: %+v", ev)
+	default:
 	}
 }
 
@@ -326,6 +570,45 @@ func TestServerCloseGivesLeave(t *testing.T) {
 	leave := nextEvent(t, srv)
 	if leave.Kind != EventLeave || leave.Session != join.Session {
 		t.Fatalf("event %+v, want leave", leave)
+	}
+}
+
+// Клиент, который не отвечает на ping (не читает сокет, pong не уходит),
+// отключается по таймауту чтения и даёт Leave.
+func TestServerClosesSilentClient(t *testing.T) {
+	srv, url := startKeepaliveServer(t, 20*time.Millisecond, 150*time.Millisecond)
+	dial(t, url+"?player=silent") // соединение открыто, но клиент ничего не читает
+	join := nextEvent(t, srv)
+	start := time.Now()
+	leave := nextEvent(t, srv)
+	if leave.Kind != EventLeave || leave.Session != join.Session {
+		t.Fatalf("event %+v, want leave of the silent session", leave)
+	}
+	if d := time.Since(start); d < 100*time.Millisecond {
+		t.Fatalf("closed after %v, before the read timeout", d)
+	}
+}
+
+// Живой клиент (читает сокет, библиотека сама отвечает pong) не отключается,
+// хотя молчит дольше таймаута чтения.
+func TestServerKeepsClientAnsweringPings(t *testing.T) {
+	srv, url := startKeepaliveServer(t, 20*time.Millisecond, 150*time.Millisecond)
+	c := dial(t, url+"?player=alive")
+	join := nextEvent(t, srv)
+	go func() {
+		for {
+			if _, _, err := c.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case ev := <-srv.Events():
+		t.Fatalf("event %+v, a client answering pings was disconnected", ev)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if join.Session.isClosed() {
+		t.Fatal("session of a live client was closed")
 	}
 }
 

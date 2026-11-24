@@ -39,17 +39,17 @@ func (h *Hub) Sessions() []*Session {
 	return list
 }
 
-// Send отправляет сообщение одной сессии.
+// Send отправляет сообщение одной сессии: состояние - в слот с затиранием,
+// остальное - в очередь уведомлений.
 func (h *Hub) Send(s *Session, msgType MessageType, payload interface{}) bool {
-	return s.Send(Encode(msgType, payload))
+	return deliver(s, msgType, Encode(msgType, payload))
 }
 
-// Broadcast отправляет одно сообщение всем сессиям; сериализация - одна.
-func (h *Hub) Broadcast(msgType MessageType, payload interface{}) {
-	data := Encode(msgType, payload)
-	for s := range h.sessions {
-		s.Send(data)
+func deliver(s *Session, msgType MessageType, data []byte) bool {
+	if msgType == MessageTypeState {
+		return s.SendState(data)
 	}
+	return s.Send(data)
 }
 
 // BroadcastPerPlayer отправляет каждой сессии сообщение её игрока.
@@ -63,6 +63,6 @@ func (h *Hub) BroadcastPerPlayer(msgType MessageType, payload func(playerID stri
 			data = Encode(msgType, payload(s.PlayerID))
 			encoded[s.PlayerID] = data
 		}
-		s.Send(data)
+		deliver(s, msgType, data)
 	}
 }
