@@ -20,7 +20,7 @@ func (e *Engine) provisionPerUnit(distMilli int64) int64 {
 
 // SendMarch отправляет марш (атаку или набег) из поселения на клетку с лагерем
 // варваров или чужой поселением. Провиант списывается при отправке
-// (GAME/game-design.md, «Марши и провиант»).
+// (documentation/game-design.md, «Марши и провиант»).
 //
 // Returns: id созданного марша.
 func (e *Engine) SendMarch(playerID, settlementID string, marchType domain.MarchType, toX, toY, units int, now int64) (string, error) {
@@ -67,20 +67,20 @@ func (e *Engine) SendMarch(playerID, settlementID string, marchType domain.March
 
 	id := e.newID("m")
 	e.addMarch(&domain.March{
-		ID:              id,
-		PlayerID:        playerID,
-		Type:            marchType,
-		Infantry:        units,
-		FromX:           v.X,
-		FromY:           v.Y,
-		ToX:             toX,
-		ToY:             toY,
+		ID:                 id,
+		PlayerID:           playerID,
+		Type:               marchType,
+		Infantry:           units,
+		FromX:              v.X,
+		FromY:              v.Y,
+		ToX:                toX,
+		ToY:                toY,
 		OriginSettlementID: settlementID,
 		TargetSettlementID: targetSettlementID,
-		TargetCampID:    targetCampID,
-		DepartUnix:      now,
-		ArriveUnix:      now + util.TravelSeconds(distMilli, e.Cfg.UnitByID["infantry"].SpeedCellsPerHour),
-		ProvisionMilli:  provision,
+		TargetCampID:       targetCampID,
+		DepartUnix:         now,
+		ArriveUnix:         now + util.TravelSeconds(distMilli, e.Cfg.UnitByID["infantry"].SpeedCellsPerHour),
+		ProvisionMilli:     provision,
 	})
 	return id, nil
 }
@@ -92,7 +92,7 @@ func (e *Engine) addMarch(m *domain.March) {
 }
 
 // CancelMarch отменяет марш до прибытия: провиант возвращается в поселение,
-// отряд разворачивается и идёт домой (GAME/game-design.md, «Марши и провиант»).
+// отряд разворачивается и идёт домой (documentation/game-design.md, «Марши и провиант»).
 func (e *Engine) CancelMarch(playerID, marchID string, now int64) error {
 	m, ok := e.World.Marches[marchID]
 	if !ok {
@@ -118,17 +118,17 @@ func (e *Engine) CancelMarch(playerID, marchID string, now int64) error {
 	elapsed := now - m.DepartUnix
 	returnID := e.newID("m")
 	e.addMarch(&domain.March{
-		ID:              returnID,
-		PlayerID:        playerID,
-		Type:            domain.MarchReturn,
-		Infantry:        m.Infantry,
-		FromX:           m.ToX,
-		FromY:           m.ToY,
-		ToX:             origin.X,
-		ToY:             origin.Y,
+		ID:                 returnID,
+		PlayerID:           playerID,
+		Type:               domain.MarchReturn,
+		Infantry:           m.Infantry,
+		FromX:              m.ToX,
+		FromY:              m.ToY,
+		ToX:                origin.X,
+		ToY:                origin.Y,
 		OriginSettlementID: origin.ID,
-		DepartUnix:      now,
-		ArriveUnix:      now + elapsed,
+		DepartUnix:         now,
+		ArriveUnix:         now + elapsed,
 	})
 	return nil
 }
@@ -219,17 +219,17 @@ func (e *Engine) sendSurvivorsHome(m *domain.March, survivors int, loot map[stri
 	travel := m.ArriveUnix - m.DepartUnix
 	returnID := e.newID("m")
 	e.addMarch(&domain.March{
-		ID:              returnID,
-		PlayerID:        m.PlayerID,
-		Type:            domain.MarchReturn,
-		Infantry:        survivors,
-		FromX:           m.ToX,
-		FromY:           m.ToY,
-		ToX:             origin.X,
-		ToY:             origin.Y,
+		ID:                 returnID,
+		PlayerID:           m.PlayerID,
+		Type:               domain.MarchReturn,
+		Infantry:           survivors,
+		FromX:              m.ToX,
+		FromY:              m.ToY,
+		ToX:                origin.X,
+		ToY:                origin.Y,
 		OriginSettlementID: origin.ID,
-		DepartUnix:      now,
-		ArriveUnix:      now + travel,
-		LootMilli:       loot,
+		DepartUnix:         now,
+		ArriveUnix:         now + travel,
+		LootMilli:          loot,
 	})
 }

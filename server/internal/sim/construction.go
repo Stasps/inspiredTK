@@ -9,7 +9,7 @@ import (
 
 // StartConstruction ставит улучшение здания в очередь строительства.
 // Ключ здания - id из конфига; для шахты - "mine:<resource>" по месторождению
-// клетки (механика шахты зафиксирована в GAME/game-design.md).
+// клетки (механика шахты зафиксирована в documentation/game-design.md).
 func (e *Engine) StartConstruction(playerID, settlementID, buildingKey string, now int64) error {
 	v, err := e.ownedSettlement(playerID, settlementID)
 	if err != nil {
@@ -167,7 +167,7 @@ func (e *Engine) applyTraining(v *domain.Settlement, now int64) {
 }
 
 // InstantComplete - тестовый режим «завершить немедленно»
-// (GAME/game-design.md, «Тестовый режим (MVP-0)»): мгновенно завершает
+// (documentation/game-design.md, «Тестовый режим (MVP-0)»): мгновенно завершает
 // строительство и тренировку в поселении. Доступно только при debugMode.
 func (e *Engine) InstantComplete(playerID, settlementID string, now int64) error {
 	if !e.Cfg.World.DebugMode {

@@ -12,10 +12,10 @@ import (
 
 func testWorld() *domain.World {
 	return &domain.World{
-		Seed:        42,
-		RngCounter:  7,
-		IDCounter:   3,
-		EventSeq:    2,
+		Seed:       42,
+		RngCounter: 7,
+		IDCounter:  3,
+		EventSeq:   2,
 		Events: []*domain.ScheduledEvent{
 			{ID: "e2", Seq: 2, Kind: domain.EventMarchArrive, EntityType: "march", EntityID: "m1", FireUnix: 1_700_000_600},
 			{ID: "e1", Seq: 1, Kind: domain.EventBuildFinish, EntityType: "settlement", EntityID: "v1", FireUnix: 1_700_010_000},

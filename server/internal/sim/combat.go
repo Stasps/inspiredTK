@@ -31,7 +31,7 @@ func (e *Engine) battleParams() BattleParams {
 	}
 }
 
-// ResolveBattle - детерминированный расчёт боя (GAME/game-design.md,
+// ResolveBattle - детерминированный расчёт боя (documentation/game-design.md,
 // «Боевая система»): (Атака x Количество) vs (Защита x Количество x Модификатор).
 // Только целочисленная арифметика с floor - одинаковый ввод даёт
 // одинаковый результат на любом сервере.

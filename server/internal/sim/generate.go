@@ -22,7 +22,7 @@ func NewWorld(cfg *config.Config, now int64) *domain.World {
 		MapSize:     size,
 		Cells:       make([]*domain.Cell, 0, size*size),
 		Players:     map[string]*domain.Player{},
-		Settlements:    map[string]*domain.Settlement{},
+		Settlements: map[string]*domain.Settlement{},
 		Camps:       map[string]*domain.Camp{},
 		Marches:     map[string]*domain.March{},
 		Events:      []*domain.ScheduledEvent{},

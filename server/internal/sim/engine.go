@@ -1,6 +1,6 @@
 // Package sim - слой Game Logic: серверная симуляция мира.
 // Engine не потокобезопасен: все вызовы обязаны идти из одной горутины
-// (актор мира с почтовым ящиком команд, см. GAME/architecture.md,
+// (актор мира с почтовым ящиком команд, см. documentation/architecture.md,
 // «Опасные места» - глобальный мьютекс запрещён).
 package sim
 
@@ -134,9 +134,9 @@ func (e *Engine) CreatePlayer(id, name string, x, y, window1, window2 int, now i
 		LastSettledUnix: now,
 	}
 	e.World.Players[id] = &domain.Player{
-		ID:         id,
-		Name:       name,
-		Windows:    [2]int{window1, window2},
+		ID:            id,
+		Name:          name,
+		Windows:       [2]int{window1, window2},
 		SettlementIDs: []string{settlementID},
 	}
 	cell.SettlementID = settlementID

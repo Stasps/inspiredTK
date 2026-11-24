@@ -1,5 +1,5 @@
 {
-  "balanceNote": "PLACEHOLDER: стоимости, времена и производство не сбалансированы, подлежат правке балансировщиком. Здания и уровни - по GAME/game-design.md (MVP-0).",
+  "balanceNote": "PLACEHOLDER: стоимости, времена и производство не сбалансированы, подлежат правке балансировщиком. Здания и уровни - по documentation/game-design.md (MVP-0).",
   "buildings": [
     {
       "id": "main",

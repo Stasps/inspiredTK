@@ -1,5 +1,5 @@
 // Package persistence - слой Persistence: JSON-снапшоты состояния и
-// журнал критичных событий (GAME/save-structure.md, GAME/architecture.md).
+// журнал критичных событий (documentation/save-structure.md, documentation/architecture.md).
 package persistence
 
 import (

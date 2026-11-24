@@ -10,7 +10,7 @@ import (
 
 // actCamp - PvE-логика лагеря по событию camp_act: лагерь атакует случайное
 // поселение раз в barbarianAttackIntervalHours, отправка марша - только
-// внутри боевых окон игрока-владельца цели (GAME/game-design.md, «PvE»).
+// внутри боевых окон игрока-владельца цели (documentation/game-design.md, «PvE»).
 // После действия лагерь сам ставит своё следующее событие.
 func (e *Engine) actCamp(camp *domain.Camp, now int64) {
 	if camp.TargetSettlementID == "" && now >= camp.NextAttackUnix && camp.Infantry > 0 {
@@ -68,17 +68,17 @@ func (e *Engine) launchBarbarianAttack(camp *domain.Camp, now int64) {
 	}
 	id := e.newID("m")
 	e.addMarch(&domain.March{
-		ID:              id,
-		Type:            domain.MarchAttack,
-		Infantry:        camp.Infantry,
-		FromX:           camp.X,
-		FromY:           camp.Y,
-		ToX:             v.X,
-		ToY:             v.Y,
-		OriginCampID:    camp.ID,
+		ID:                 id,
+		Type:               domain.MarchAttack,
+		Infantry:           camp.Infantry,
+		FromX:              camp.X,
+		FromY:              camp.Y,
+		ToX:                v.X,
+		ToY:                v.Y,
+		OriginCampID:       camp.ID,
 		TargetSettlementID: v.ID,
-		DepartUnix:      now,
-		ArriveUnix:      now + e.travelSeconds(camp.X, camp.Y, v.X, v.Y),
+		DepartUnix:         now,
+		ArriveUnix:         now + e.travelSeconds(camp.X, camp.Y, v.X, v.Y),
 	})
 	camp.Infantry = 0
 }

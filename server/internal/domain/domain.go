@@ -1,12 +1,12 @@
 // Package domain содержит типы состояния мира Inspired Kingdoms.
-// Сериализация - только целые числа (см. GAME/save-structure.md): количества
+// Сериализация - только целые числа (см. documentation/save-structure.md): количества
 // ресурсов хранятся в милли-единицах (x1000), время - в unix-секундах.
 package domain
 
-// SnapshotVersion - текущая версия формата снапшота (GAME/save-structure.md).
+// SnapshotVersion - текущая версия формата снапшота (documentation/save-structure.md).
 const SnapshotVersion = 1
 
-// Категории складов (GAME/game-design.md, «Склады»).
+// Категории складов (documentation/game-design.md, «Склады»).
 const (
 	CategoryFood    = "food"
 	CategoryNonFood = "nonfood"
@@ -14,11 +14,11 @@ const (
 
 // Cell - клетка карты мира.
 type Cell struct {
-	X         int      `json:"x"`
-	Y         int      `json:"y"`
-	Deposits  []string `json:"deposits"`
+	X            int      `json:"x"`
+	Y            int      `json:"y"`
+	Deposits     []string `json:"deposits"`
 	SettlementID string   `json:"settlementId,omitempty"`
-	CampID    string   `json:"campId,omitempty"`
+	CampID       string   `json:"campId,omitempty"`
 }
 
 // HasDeposit сообщает, есть ли на клетке месторождение ресурса.
@@ -34,9 +34,9 @@ func (c *Cell) HasDeposit(resourceID string) bool {
 // Player - аккаунт игрока. Windows - часы начала боевых окон (UTC), каждое
 // окно длиной windowHours из конфига мира.
 type Player struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Windows    [2]int   `json:"windows"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Windows       [2]int   `json:"windows"`
 	SettlementIDs []string `json:"settlementIds"`
 }
 
@@ -44,8 +44,8 @@ type Player struct {
 type BuildJob struct {
 	BuildingKey string `json:"buildingKey"`
 	TargetLevel int    `json:"targetLevel"`
-	StartUnix    int64  `json:"startUnix"`
-	FinishUnix   int64  `json:"finishUnix"`
+	StartUnix   int64  `json:"startUnix"`
+	FinishUnix  int64  `json:"finishUnix"`
 	// EventID - id события планировщика, которое завершит стройку.
 	EventID string `json:"eventId,omitempty"`
 }
@@ -77,22 +77,22 @@ const (
 
 // March - движущийся отряд пехотинцев.
 type March struct {
-	ID              string           `json:"id"`
-	PlayerID        string           `json:"playerId,omitempty"`
-	Type            MarchType        `json:"type"`
-	Infantry        int              `json:"infantry"`
-	FromX           int              `json:"fromX"`
-	FromY           int              `json:"fromY"`
-	ToX             int              `json:"toX"`
-	ToY             int              `json:"toY"`
+	ID                 string           `json:"id"`
+	PlayerID           string           `json:"playerId,omitempty"`
+	Type               MarchType        `json:"type"`
+	Infantry           int              `json:"infantry"`
+	FromX              int              `json:"fromX"`
+	FromY              int              `json:"fromY"`
+	ToX                int              `json:"toX"`
+	ToY                int              `json:"toY"`
 	OriginSettlementID string           `json:"originSettlementId,omitempty"`
-	OriginCampID    string           `json:"originCampId,omitempty"`
+	OriginCampID       string           `json:"originCampId,omitempty"`
 	TargetSettlementID string           `json:"targetSettlementId,omitempty"`
-	TargetCampID    string           `json:"targetCampId,omitempty"`
-	DepartUnix      int64            `json:"departUnix"`
-	ArriveUnix      int64            `json:"arriveUnix"`
-	ProvisionMilli  int64            `json:"provisionMilli"`
-	LootMilli       map[string]int64 `json:"lootMilli,omitempty"`
+	TargetCampID       string           `json:"targetCampId,omitempty"`
+	DepartUnix         int64            `json:"departUnix"`
+	ArriveUnix         int64            `json:"arriveUnix"`
+	ProvisionMilli     int64            `json:"provisionMilli"`
+	LootMilli          map[string]int64 `json:"lootMilli,omitempty"`
 	// EventID - id события планировщика о прибытии марша.
 	EventID string `json:"eventId,omitempty"`
 }
@@ -106,7 +106,7 @@ type Camp struct {
 	StockMilli          map[string]int64 `json:"stockMilli"`
 	NextAttackUnix      int64            `json:"nextAttackUnix"`
 	ScheduledDepartUnix int64            `json:"scheduledDepartUnix"`
-	TargetSettlementID     string           `json:"targetSettlementId,omitempty"`
+	TargetSettlementID  string           `json:"targetSettlementId,omitempty"`
 	// EventID - id ожидающего события планировщика; пусто, если лагерь
 	// простаивает (нет войск и нет запланированной атаки).
 	EventID string `json:"eventId,omitempty"`
@@ -123,7 +123,7 @@ const (
 )
 
 // ScheduledEvent - запись планировщика: «жёсткий» дедлайн сущности
-// (GAME/save-structure.md, «scheduled event»). Порядок срабатывания -
+// (documentation/save-structure.md, «scheduled event»). Порядок срабатывания -
 // по (FireUnix, Seq), поэтому он одинаков после любого перезапуска.
 type ScheduledEvent struct {
 	ID         string    `json:"id"`
@@ -136,20 +136,20 @@ type ScheduledEvent struct {
 
 // World - полное состояние симуляции.
 type World struct {
-	Seed        int64               `json:"seed"`
-	RngCounter  int64               `json:"rngCounter"`
-	IDCounter   int64               `json:"idCounter"`
+	Seed       int64 `json:"seed"`
+	RngCounter int64 `json:"rngCounter"`
+	IDCounter  int64 `json:"idCounter"`
 	// EventSeq - счётчик событий планировщика; Events - его min-heap
 	// по (FireUnix, Seq). Куча лежит в состоянии и попадает в снапшот.
-	EventSeq    int64               `json:"eventSeq"`
-	Events      []*ScheduledEvent   `json:"events"`
-	CreatedUnix int64               `json:"createdUnix"`
-	MapSize     int                 `json:"mapSize"`
-	Cells       []*Cell             `json:"cells"`
-	Players     map[string]*Player  `json:"players"`
-	Settlements    map[string]*Settlement `json:"settlements"`
-	Camps       map[string]*Camp    `json:"camps"`
-	Marches     map[string]*March   `json:"marches"`
+	EventSeq    int64                  `json:"eventSeq"`
+	Events      []*ScheduledEvent      `json:"events"`
+	CreatedUnix int64                  `json:"createdUnix"`
+	MapSize     int                    `json:"mapSize"`
+	Cells       []*Cell                `json:"cells"`
+	Players     map[string]*Player     `json:"players"`
+	Settlements map[string]*Settlement `json:"settlements"`
+	Camps       map[string]*Camp       `json:"camps"`
+	Marches     map[string]*March      `json:"marches"`
 }
 
 // MapHalf - полуразмер карты: логические координаты клеток идут

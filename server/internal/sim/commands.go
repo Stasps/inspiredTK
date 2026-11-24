@@ -1,6 +1,6 @@
 // Package sim provides game simulation logic for Inspired Kingdoms.
 // Engine is not thread-safe: all calls must come from a single goroutine
-// (world actor with command mailbox, see GAME/architecture.md).
+// (world actor with command mailbox, see documentation/architecture.md).
 package sim
 
 import (
@@ -171,17 +171,19 @@ func (e *Engine) GetMap() []MapCell {
 // Only available when debugMode is enabled.
 //
 // Parameters:
+//   - playerID: player issuing the command
 //   - settlementID: settlement identifier
 //   - amounts: map of resource ID to amount in whole units
 //
-// Returns: error if debugMode is off, settlement not found, or unknown resource.
-func (e *Engine) AddResources(settlementID string, amounts map[string]int64) error {
+// Returns: error if debugMode is off, settlement not found or not owned
+// by the player, or unknown resource.
+func (e *Engine) AddResources(playerID, settlementID string, amounts map[string]int64) error {
 	if !e.Cfg.World.DebugMode {
 		return fmt.Errorf("add_resources is disabled: debugMode is off")
 	}
-	v, ok := e.World.Settlements[settlementID]
-	if !ok {
-		return fmt.Errorf("unknown settlement %q", settlementID)
+	v, err := e.ownedSettlement(playerID, settlementID)
+	if err != nil {
+		return err
 	}
 	e.settle(v, time.Now().Unix())
 	for resID, units := range amounts {
@@ -199,34 +201,30 @@ func (e *Engine) AddResources(settlementID string, amounts map[string]int64) err
 // for mines - "mine:<resource>" by cell deposit.
 //
 // Parameters:
+//   - playerID: player issuing the command
 //   - settlementID: settlement identifier
 //   - buildingID: building config ID or "mine:<resource>" for mines
 //
-// Returns: error if settlement not found or construction cannot start.
-func (e *Engine) UpgradeBuilding(settlementID, buildingID string) error {
-	v, ok := e.World.Settlements[settlementID]
-	if !ok {
-		return fmt.Errorf("unknown settlement %q", settlementID)
-	}
-	return e.startConstruction(v, buildingID, time.Now().Unix())
+// Returns: error if settlement not found or not owned by the player, or
+// construction cannot start.
+func (e *Engine) UpgradeBuilding(playerID, settlementID, buildingID string) error {
+	return e.StartConstruction(playerID, settlementID, buildingID, time.Now().Unix())
 }
 
 // TrainUnits trains units in barracks.
 // Units appear in garrison after each unit's training time.
 //
 // Parameters:
+//   - playerID: player issuing the command
 //   - settlementID: settlement identifier
 //   - unitType: unit config ID
 //   - count: number of units to train
 //
-// Returns: error if settlement not found, unknown unit, or training cannot start.
-func (e *Engine) TrainUnits(settlementID, unitType string, count int) error {
-	v, ok := e.World.Settlements[settlementID]
-	if !ok {
-		return fmt.Errorf("unknown settlement %q", settlementID)
-	}
+// Returns: error if settlement not found or not owned by the player, unknown
+// unit, or training cannot start.
+func (e *Engine) TrainUnits(playerID, settlementID, unitType string, count int) error {
 	if _, ok := e.Cfg.UnitByID[unitType]; !ok {
 		return fmt.Errorf("unknown unit %q", unitType)
 	}
-	return e.startTraining(v, count, time.Now().Unix())
+	return e.StartTraining(playerID, settlementID, count, time.Now().Unix())
 }

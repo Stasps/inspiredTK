@@ -57,24 +57,16 @@ func main() {
 	}
 	engine := sim.NewEngine(cfg, world, events)
 
-	// Debug-режим: при пустом мире создаём игрока-заглушку, чтобы клиенту
-	// было что отображать без полноценной регистрации.
-	if cfg.World.DebugMode && len(engine.World.Players) == 0 {
-		if err := createDebugPlayer(engine); err != nil {
-			logger.Printf("debug player: %v", err)
-		} else {
-			logger.Printf("debug player created: settlement of player %q", debugPlayerID)
-		}
-	}
-
 	// Догон после простоя сервера: все просроченные события применяются по
 	// порядку (fire_at, seq) до приёма соединений.
 	if n := engine.Advance(time.Now().Unix()); n > 0 {
 		logger.Printf("scheduler: caught up %d overdue events", n)
 	}
 
-	// Initialize WebSocket server; commands are consumed in the main select loop.
+	// Сетевой край: у каждого соединения свои горутины чтения и записи;
+	// события сессий разбирает цикл ниже, реестр сессий принадлежит ему.
 	wsServer := transport.NewServer()
+	hub := transport.NewHub()
 
 	// Setup HTTP routes
 	http.HandleFunc("/ws", wsServer.HandleWebSocket)
@@ -111,7 +103,7 @@ func main() {
 
 	// Временная рассылка состояния раз в секунду: debug-клиент не интерполирует
 	// ресурсы и прогресс сам. Симуляцию она не двигает и уйдёт вместе с
-	// адресной рассылкой (GAME/roadmap.md, «транспорт под модель»).
+	// адресной рассылкой (documentation/roadmap.md, «транспорт под модель»).
 	pushTick := time.NewTicker(time.Second)
 	defer pushTick.Stop()
 	snapTick := time.NewTicker(time.Duration(cfg.World.SnapshotIntervalSeconds) * time.Second)
@@ -125,20 +117,43 @@ func main() {
 		case <-wakeC:
 			engine.Advance(time.Now().Unix())
 			rearm()
-		case cmd := <-wsServer.CommandChan():
-			// Инвариант: перед командой применены все события с fire_at <= now.
-			engine.Advance(time.Now().Unix())
-			if err := executeCommand(engine, wsServer, cmd); err != nil {
-				logger.Printf("command %s failed: %v", cmd.Name, err)
-				wsServer.Broadcast(transport.MessageTypeError, map[string]string{
-					"error": fmt.Sprintf("command %s: %v", cmd.Name, err),
-				})
+		case ev := <-wsServer.Events():
+			switch ev.Kind {
+			case transport.EventJoin:
+				now := time.Now().Unix()
+				engine.Advance(now)
+				// В debugMode незнакомый игрок создаётся при входе.
+				info, err := engine.JoinPlayer(ev.Session.PlayerID, now)
+				if err != nil {
+					logger.Printf("session %d: join player %q: %v", ev.Session.ID, ev.Session.PlayerID, err)
+					ev.Session.SendAndClose(transport.EncodeError(fmt.Sprintf("join: %v", err)))
+					break
+				}
+				hub.Add(ev.Session)
+				hub.Send(ev.Session, transport.MessageTypeHello, info)
+				hub.Send(ev.Session, transport.MessageTypeState, engine.PlayerState(info.PlayerID, now))
+				rearm()
+			case transport.EventLeave:
+				hub.Remove(ev.Session)
+			case transport.EventCommand:
+				cmd := ev.Command
+				// Инвариант: перед командой применены все события с fire_at <= now.
+				engine.Advance(time.Now().Unix())
+				if err := executeCommand(engine, hub, ev.Session.PlayerID, cmd); err != nil {
+					logger.Printf("command %s failed: %v", cmd.Name, err)
+					hub.Broadcast(transport.MessageTypeError, map[string]string{
+						"error": fmt.Sprintf("command %s: %v", cmd.Name, err),
+					})
+				}
+				// Команда могла поставить событие раньше прежнего ближайшего
+				// (или сдвинуть время в debug-режиме).
+				rearm()
 			}
-			// Команда могла поставить событие раньше прежнего ближайшего
-			// (или сдвинуть время в debug-режиме).
-			rearm()
 		case <-pushTick.C:
-			wsServer.BroadcastState(stateOf(engine))
+			now := time.Now().Unix()
+			hub.BroadcastPerPlayer(transport.MessageTypeState, func(playerID string) interface{} {
+				return engine.PlayerState(playerID, now)
+			})
 		case <-snapTick.C:
 			save()
 		case <-sig:
@@ -149,87 +164,46 @@ func main() {
 	}
 }
 
-// debugPlayerID - аккаунт-заглушка, создаваемый в debugMode при пустом мире.
-const debugPlayerID = "debug"
-
-// stateOf собирает состояние для рассылки: мир + состояние поселения debug-игрока.
-func stateOf(e *sim.Engine) interface{} {
-	v, err := debugSettlement(e)
-	if err != nil {
-		return e.GetClientState("", time.Now().Unix())
-	}
-	return e.GetClientState(v.ID, time.Now().Unix())
-}
-
-// createDebugPlayer сажает debug-игрока в центр карты (0,0); если центр занят -
-// на ближайшую к свободную клетку с месторождением (чтобы шахта mine:<resource>
-// была доступна сразу), если месторождений рядом нет - на ближайшую свободную.
-func createDebugPlayer(e *sim.Engine) error {
-	bestDeposit := -1
-	bestFree := -1
-	var bestDepositDist, bestFreeDist int64 = -1, -1
-	for i, c := range e.World.Cells {
-		if c.SettlementID != "" || c.CampID != "" {
-			continue
-		}
-		dx := int64(c.X)
-		dy := int64(c.Y)
-		d := dx*dx + dy*dy
-		if len(c.Deposits) > 0 && (bestDeposit < 0 || d < bestDepositDist) {
-			bestDeposit, bestDepositDist = i, d
-		}
-		if bestFree < 0 || d < bestFreeDist {
-			bestFree, bestFreeDist = i, d
-		}
-	}
-	idx := bestDeposit
-	if idx < 0 {
-		idx = bestFree
-	}
-	if idx >= 0 {
-		c := e.World.Cells[idx]
-		return e.CreatePlayer(debugPlayerID, "Debug Player", c.X, c.Y, 10, 19, time.Now().Unix())
-	}
-	return fmt.Errorf("no free cell on the map")
-}
-
-// debugSettlement возвращает поселение debug-игрока (первая и единственная).
-func debugSettlement(e *sim.Engine) (*domain.Settlement, error) {
-	p, ok := e.World.Players[debugPlayerID]
-	if !ok || len(p.SettlementIDs) == 0 {
-		return nil, fmt.Errorf("no debug player settlement")
-	}
-	return e.World.Settlements[p.SettlementIDs[0]], nil
-}
-
-// executeCommand routes a queued client command to the engine.
+// executeCommand routes a queued client command to the engine on behalf of
+// the session's player. Commands on a settlement carry data.settlementId;
+// ownership is checked by the engine.
 // Engine is not thread-safe, so this is called only from the main loop.
-func executeCommand(e *sim.Engine, ws *transport.Server, cmd transport.Command) error {
+func executeCommand(e *sim.Engine, hub *transport.Hub, playerID string, cmd transport.Command) error {
+	settlementID := func() (string, error) {
+		id, ok := cmd.Data["settlementId"].(string)
+		if !ok || id == "" {
+			return "", fmt.Errorf("missing settlementId parameter")
+		}
+		return id, nil
+	}
 	switch cmd.Name {
 	case "add_resources":
+		sid, err := settlementID()
+		if err != nil {
+			return err
+		}
 		amounts := make(map[string]int64, len(cmd.Data))
 		for resID, raw := range cmd.Data {
+			if resID == "settlementId" {
+				continue
+			}
 			amount, ok := toInt64(raw)
 			if !ok {
 				return fmt.Errorf("add_resources: invalid amount for %q", resID)
 			}
 			amounts[resID] = amount
 		}
-		v, err := debugSettlement(e)
-		if err != nil {
-			return err
-		}
-		return e.AddResources(v.ID, amounts)
+		return e.AddResources(playerID, sid, amounts)
 	case "upgrade_building":
 		buildingID, ok := cmd.Data["building"].(string)
 		if !ok || buildingID == "" {
 			return fmt.Errorf("missing building parameter")
 		}
-		v, err := debugSettlement(e)
+		sid, err := settlementID()
 		if err != nil {
 			return err
 		}
-		return e.UpgradeBuilding(v.ID, buildingID)
+		return e.UpgradeBuilding(playerID, sid, buildingID)
 	case "train_unit":
 		unitType, ok := cmd.Data["unit"].(string)
 		if !ok || unitType == "" {
@@ -239,19 +213,19 @@ func executeCommand(e *sim.Engine, ws *transport.Server, cmd transport.Command) 
 		if !ok || count <= 0 {
 			return fmt.Errorf("invalid count parameter")
 		}
-		v, err := debugSettlement(e)
+		sid, err := settlementID()
 		if err != nil {
 			return err
 		}
-		return e.TrainUnits(v.ID, unitType, int(count))
+		return e.TrainUnits(playerID, sid, unitType, int(count))
 	case "finish_now":
-		v, err := debugSettlement(e)
+		sid, err := settlementID()
 		if err != nil {
 			return err
 		}
-		return e.InstantComplete(debugPlayerID, v.ID, time.Now().Unix())
+		return e.InstantComplete(playerID, sid, time.Now().Unix())
 	case "get_map":
-		ws.Broadcast(transport.MessageTypeMap, e.GetMap())
+		hub.Broadcast(transport.MessageTypeMap, e.GetMap())
 		return nil
 	case "skip_time":
 		seconds, ok := toInt64(cmd.Data["seconds"])

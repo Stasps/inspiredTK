@@ -9,7 +9,7 @@ import (
 )
 
 // settle досчитывает производство поселения по прошедшему серверному времени
-// (лениво, по формуле - не циклом по тикам, см. GAME/quality-attributes.md).
+// (лениво, по формуле - не циклом по тикам, см. documentation/quality-attributes.md).
 // Вызывается перед любым чтением/списанием ресурсов поселения, поэтому
 // начисление и трата атомарны в одном расчёте - без дюпов.
 // Порядок обхода зданий отсортирован: итог при переполнении склада
@@ -20,7 +20,7 @@ func (e *Engine) settle(v *domain.Settlement, now int64) {
 	}
 	dt := now - v.LastSettledUnix
 	// Базовая выработка: каждая поселение производит немного каждого ресурса
-	// даже без зданий (GAME/game-design.md, MVP-0).
+	// даже без зданий (documentation/game-design.md, MVP-0).
 	if base := e.Cfg.World.BaseProductionPerHour; base > 0 {
 		baseMilli := util.PerHourToMilli(base)
 		for _, rc := range e.Cfg.Resources.Resources {

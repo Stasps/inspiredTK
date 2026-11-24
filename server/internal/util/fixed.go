@@ -4,7 +4,7 @@ package util
 import "math"
 
 // MilliPerUnit - число милли-единиц в одной целой единице ресурса.
-// Все количества в состоянии хранятся в милли-единицах (GAME/save-structure.md).
+// Все количества в состоянии хранятся в милли-единицах (documentation/save-structure.md).
 const MilliPerUnit int64 = 1000
 
 // MilliPerHour - милли-секундная точность тарифа «в час».
@@ -30,7 +30,7 @@ func AccrueMilli(rateMilliPerHour, elapsedSec int64) int64 {
 }
 
 // DistanceMilli возвращает евклидово расстояние между клетками в милли-клетках.
-// Сетка квадратная (GAME/game-design.md, «Карта мира»); для координат карты
+// Сетка квадратная (documentation/game-design.md, «Карта мира»); для координат карты
 // промежуточные значения не выходят за 2^53, округление floor детерминировано.
 func DistanceMilli(x1, y1, x2, y2 int) int64 {
 	dx := int64(x1 - x2)
